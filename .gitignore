@@ -2,7 +2,12 @@
 /build/
 
 # Simulation logs
-/obayashiIOFiles/Log/
+/obayashiIOFiles/Log/*
+!/obayashiIOFiles/Log/.gitkeep
+
+# Large archived results
+/obayashiIOFiles/zip/*
+!/obayashiIOFiles/zip/.gitkeep
 
 # waf cache and lock files
 /.waf3-*/
@@ -28,6 +33,3 @@ core.*
 *~
 *.swp
 *.swo
-
-# Large compressed result files
-obayashiIOFiles/zip/
