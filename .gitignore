@@ -1,0 +1,33 @@
+# Build results
+/build/
+
+# Simulation logs
+/obayashiIOFiles/Log/
+
+# waf cache and lock files
+/.waf3-*/
+/.lock-waf_linux_build
+/.lock-waf*
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Compiled objects
+*.o
+*.obj
+*.so
+*.a
+
+# Crash dumps
+core
+core.*
+
+# Editor temporary files
+*~
+*.swp
+*.swo
+
+# Large compressed result files
+obayashiIOFiles/zip/
