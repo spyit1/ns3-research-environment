@@ -26,7 +26,7 @@ __pycache__/
 *.a
 
 # Crash dumps
-core
+/core
 core.*
 
 # Editor temporary files
