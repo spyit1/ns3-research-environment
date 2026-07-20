@@ -1,0 +1,216 @@
+/*
+ * simple-packet.h
+ *
+ *  Created on: 2016/03/03
+ *      Author: terami
+ */
+
+#ifndef SIMPLE_PACKET_H_
+#define SIMPLE_PACKET_H_
+
+#include <iostream>
+#include <map>
+#include <list>
+#include <unordered_map>
+#include <vector>
+#include <set>
+#include <string>
+
+#include "cluster-list.h"
+#include "evacuation-accesspoint.h"
+#include "evacuation-user.h"
+#include "simple-rtable.h"
+#include "ns3/header.h"
+#include "ns3/enum.h"
+#include "ns3/ipv4-address.h"
+#include "ns3/nstime.h"
+
+
+#define HOGEHOGE 0
+#define FLOODING 1
+#define ADHOC_CLUSTER 5
+
+namespace ns3 {
+namespace simple {
+//必要なパケットを識別するための識別子を定義しておく
+enum MessageType
+{
+	TYPE_META_DATA = 1,
+	TYPE_HELLO = 2,
+	TYPE_USERDATA = 3,
+	TYPE_SHELTERDATA = 4
+};
+
+class TypeHeader : public Header
+{
+public:
+	TypeHeader(MessageType t = TYPE_HELLO);
+
+	static TypeId GetTypeId (void);
+	TypeId GetInstanceTypeId (void) const;
+	uint32_t GetSerializedSize (void) const; //カプセル化後のヘッダサイズを取得する関数
+	void Serialize (Buffer::Iterator start) const; //ヘッダ部のカプセル化関数
+	uint32_t Deserialize (Buffer::Iterator start); //ヘッダ部のデカプセル化関数
+	void Print (std::ostream &os) const;
+
+	//プロトコルパケットのタイプ識別子を取得する関数
+	MessageType Get (void) const {return m_type;}
+	bool IsValid (void) const {return m_valid;}
+	bool operator== (TypeHeader const & o) const;
+
+private:
+	MessageType m_type;
+	bool m_valid;
+};
+std::ostream &operator << (std::ostream &os,TypeHeader const &h);
+
+
+class UserData: public Header
+{
+private:
+	mutable uint32_t m_serialSize;
+
+	Ipv4Address m_source;
+	Ipv4Address m_dst;
+	uint32_t m_userId;
+	std::set<String> m_blocked_set;
+	std::set<String> m_blocked_set_buf;
+	std::set<String> m_fullexit_set;
+	std::map <String, std::pair<uint32_t, uint32_t>> m_aoi_exitinfo;
+	std::map <String, float> m_aoi_blockinfo;
+
+
+public:
+
+	UserData(){
+		m_userId = 0;
+	}
+
+	UserData (uint32_t userId, Ipv4Address dst, std::set<String> b_set, std::set<String> fullexit_set, std::map <String, std::pair<uint32_t, uint32_t>> aoi_exitinfo, std::map <String, float> aoi_blockinfo)
+	{
+		m_userId = userId;
+		m_dst=dst;
+		for(auto b : b_set){
+			m_blocked_set.insert(b);
+		}
+		m_fullexit_set = fullexit_set;
+		m_aoi_exitinfo = aoi_exitinfo;
+		m_aoi_blockinfo = aoi_blockinfo;
+	}
+
+	static TypeId GetTypeId();
+	TypeId GetInstanceTypeId() const;
+	void SetSerializedSize(uint32_t size) const {m_serialSize=size;};
+	uint32_t GetSerializedSize() const;
+	uint64_t GetSerializedSize(bool flag) const;
+	void Serialize(Buffer::Iterator start) const;
+	uint32_t Deserialize (Buffer::Iterator start);
+	void PrintList() const;
+	void Print (std::ostream &os) const;
+	bool operator==(UserData const &o) const;
+	void SetUserId(uint32_t userId){m_userId=userId;}
+	uint32_t GetUserId(){return m_userId;}
+	void SetDst(Ipv4Address dst){m_dst=dst;}
+	Ipv4Address GetDst(){return m_dst;}
+	void SetBlockedNodeIDSet(String id){m_blocked_set.insert(id);}
+	std::set<String> GetBlockedNodeIDSet(void){return m_blocked_set;}
+	uint32_t GetBlockedNodeIDSetSize(void){return m_blocked_set.size();}
+	std::set<String> GetFullExitNodeIDSet(void){return m_fullexit_set;}
+	std::map<String, std::pair<uint32_t, uint32_t>> GetAoIExitinfo(void){return m_aoi_exitinfo;}
+	std::map<String, float> GetAoIBlockedInfo(void){return m_aoi_blockinfo;}
+
+	// void SetBlockedNodeIDSetBuf(){m_blocked_set_buf = m_blocked_set;}
+	// std::set<String> GetBlockedNodeIDSetBuf(void){return m_blocked_set_buf;}
+
+
+};
+std::ostream &operator << (std::ostream &os,UserData const &);
+
+
+
+class Hello : public Header
+{
+public:
+
+	static TypeId GetTypeId();
+	TypeId GetInstanceTypeId() const;
+
+	void SetSerializedSize(uint32_t size) const {m_serialSize=size;};
+	uint32_t GetSerializedSize() const;
+
+	void Serialize(Buffer::Iterator start) const;
+	uint32_t Deserialize (Buffer::Iterator start);
+	void Print(std::ostream &os) const;
+
+	void SetId (Ipv4Address id) { m_id = id; }
+	Ipv4Address GetId () const { return m_id; }
+
+	void SetBroadcastId(uint32_t id){m_broadcast_id=id;}
+	uint32_t GetBroadcastId(){return m_broadcast_id;}
+
+	void SetUserID(uint32_t userID){m_userID=userID;}
+	uint32_t GetUserID(){return m_userID;}
+
+	bool operator==(Hello const &o) const;
+
+private:
+	mutable uint32_t m_serialSize;
+	Ipv4Address m_id;
+	uint32_t m_broadcast_id;
+	uint32_t m_userID;
+};
+std::ostream &operator << (std::ostream &os,Hello const &);
+
+class ShelterInfo: public Header
+{
+private:
+	mutable uint32_t m_serialSize;
+	Ipv4Address m_id;
+	uint32_t m_broadcast_id;
+	uint32_t m_exit_num;
+	uint32_t m_shelterID;
+	uint32_t m_time;
+
+
+public:
+
+	ShelterInfo ()
+	{
+		m_shelterID = 0;
+		m_exit_num = 0;
+		m_time =  0;
+
+	}
+	ShelterInfo (uint32_t shelterid, uint32_t exit_num, uint32_t time)
+	{
+		// m_dst = dst;
+		m_shelterID = shelterid;
+		m_exit_num = exit_num;
+		m_time = time;
+
+	}
+
+	static TypeId GetTypeId();
+	TypeId GetInstanceTypeId() const;
+	void SetSerializedSize(uint32_t size) const {m_serialSize=size;};
+	uint32_t GetSerializedSize() const;
+	uint64_t GetSerializedSize(bool flag) const;
+	void Serialize(Buffer::Iterator start) const;
+	uint32_t Deserialize (Buffer::Iterator start);
+	void PrintList() const;
+	void Print (std::ostream &os) const;
+	bool operator==(ShelterInfo const &o) const;
+	// DataKey GetKey(){return DataKey(m_source, m_seqNo);}
+	void SetId (Ipv4Address id) { m_id = id; }
+	Ipv4Address GetId () const { return m_id; }
+	void SetBroadcastId(uint32_t id){m_broadcast_id=id;}
+	uint32_t GetBroadcastId(){return m_broadcast_id;}
+	uint32_t GetShelterId(void){return m_shelterID;}
+	uint32_t GetExitNum(void){return m_exit_num;}
+	uint32_t GetTime(void){return m_time;}
+};
+std::ostream &operator << (std::ostream &os,ShelterInfo const &);
+
+}}
+
+#endif /* SIMPLE_PACKET_H_ */
