@@ -149,6 +149,7 @@ private :
 	void OutputClusterMemberSize();
 	void OutputClusterHopInfo();
 	void OutputUserDataInfo();
+	void WriteBlockedNodeKnowledgeLog();
 
 	void GenerateRandomNodePosition (std::map<std::string, double> &);
 	void GenerateNodePosition (std::map<std::string, double> &);
@@ -1218,6 +1219,131 @@ void NetSim::OutputUserDataInfo(){
 	fout.close();
 }
 
+void NetSim::WriteBlockedNodeKnowledgeLog()
+{
+        String mode = "ON";
+        if (!simple::RoutingProtocol::GetMode()) {
+                mode = "OFF";
+        }
+
+        String quickhello = "QuickHello_ON";
+        if (!simple::RoutingProtocol::GetUseQuickHelloflag()) {
+                quickhello = "QuickHello_OFF";
+        }
+
+        String eraseblock = "EraseBlock_ON";
+        if (!simple::RoutingProtocol::GetUseEraseInfoflag()) {
+                eraseblock = "EraseBlock_OFF";
+        }
+
+        std::string path =
+                "obayashiIOFiles/Log/obayashi/" + std::string(mode) + "/" +
+                std::string(quickhello) + "/" +
+                std::string(eraseblock) + "/" +
+                std::to_string(simple::MyBuilding::GetNumUsers()) +
+                "/Info/BlockedNodeKnowledge_" +
+                std::to_string(simple::MyBuilding::GetRun()) + ".txt";
+
+        std::ofstream fout;
+        fout.open(path, std::ios::app);
+
+        if (!fout.is_open()) {
+                std::cerr
+                        << "BlockedNodeKnowledge log file could not be opened: "
+                        << path << std::endl;
+                return;
+        }
+
+        if (fout.tellp() == 0) {
+                fout << "time,blocked_node_id,known_user_count,"
+                     << "active_user_count,knowledge_rate"
+                     << std::endl;
+        }
+
+        double now = Simulator::Now().GetSeconds();
+
+        std::set<uint32_t> activeUsers =
+                simple::MyBuilding::GetActiveUsers();
+
+        std::list<String> allBlockedNodes =
+                simple::MyBuilding::GetBlockedNodes2();
+
+        std::map<String, uint32_t> knownUserCounts;
+
+        // 全通行止めを0人で初期化
+        for (const auto& blockedNodeId : allBlockedNodes) {
+                if (!blockedNodeId.empty()) {
+                        knownUserCounts[blockedNodeId] = 0;
+                }
+        }
+
+        uint32_t maxUserCount =
+                simple::MyBuilding::GetNumUsers() +
+                simple::MyBuilding::GetAddUsersNum();
+
+        // ActiveUserだけを確認
+        for (uint32_t userId : activeUsers) {
+                if (userId == 0) {
+                        continue;
+                }
+
+                uint32_t userIndex = userId - 1;
+
+                // n_user配列の範囲外を参照しないための確認
+                if (userIndex >= maxUserCount) {
+                        continue;
+                }
+
+                Ptr<simple::MyUser> user = n_user[userIndex];
+
+                if (user == 0) {
+                        continue;
+                }
+
+                std::set<String> userBlockedNodes =
+                        user->GetBlockedNodeIDSet();
+
+                for (const auto& blockedNodeId : userBlockedNodes) {
+                        auto it = knownUserCounts.find(blockedNodeId);
+
+                        // blocked_nodes_ALL.txtに存在する通行止めだけを数える
+                        if (it != knownUserCounts.end()) {
+                                it->second++;
+                        }
+                }
+        }
+
+        uint32_t activeUserCount = activeUsers.size();
+
+        for (const auto& item : knownUserCounts) {
+                const String& blockedNodeId = item.first;
+                uint32_t knownUserCount = item.second;
+
+                double knowledgeRate = 0.0;
+
+                if (activeUserCount > 0) {
+                        knowledgeRate =
+                                static_cast<double>(knownUserCount) /
+                                static_cast<double>(activeUserCount) *
+                                100.0;
+                }
+
+                fout << now << ","
+                     << blockedNodeId << ","
+                     << knownUserCount << ","
+                     << activeUserCount << ","
+                     << knowledgeRate
+                     << std::endl;
+        }
+
+        fout.close();
+
+        Simulator::Schedule(
+                Seconds(10.0),
+                &NetSim::WriteBlockedNodeKnowledgeLog,
+                this);
+}
+
 
 NetSim::NetSim (): totalReceived(0), totalSent(0)
 {
@@ -2086,6 +2212,7 @@ void NetSim::SetFlowMonitor ()
 	uint32_t ALL_Loss_Packets = 0;
 	Simulator::Stop (Seconds (simtime));
 	Simulator::Schedule(Seconds(0.0), &simple::MyBuilding::WriteActiveUserLog);
+	Simulator::Schedule(Seconds(0.0), &NetSim::WriteBlockedNodeKnowledgeLog, this);
 	Simulator::Run ();
 
 	monitor->CheckForLostPackets();

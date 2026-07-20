@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 foldername="ferry2"
 num_run=1
-simtime=2000
+simtime=200
 mode="ON"
 quickhello="QuickHello_ON"
 eraseinfo="EraseBlock_ON"
-user_num="600"
+user_num="500"
 z=1
 A_d=20000
 #p_mode = 2 #1=simple 2=DTN
