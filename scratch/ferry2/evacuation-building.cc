@@ -556,14 +556,39 @@ void MyBuilding::WriteActiveUserLog()
     fout.open(path, std::ios::app);
 
     if (fout.tellp() == 0) {
-        fout << "time,active_user" << std::endl;
+        fout << "time,active_user,active_user_ids" << std::endl;
     }
 
     double now = Simulator::Now().GetSeconds();
-    fout << now << " " << MyBuilding::GetActiveUserNum() << std::endl;
+
+    // 現在ActiveUserになっているユーザIDを取得
+    std::set<uint32_t> activeUsers = MyBuilding::GetActiveUsers();
+
+    // 時刻とActiveUser数を出力
+    fout << now << ","
+         << activeUsers.size()
+         << ",\"";
+
+    // ActiveUserのユーザIDを出力
+    bool first = true;
+
+    for (uint32_t userId : activeUsers) {
+        if (!first) {
+            fout << " ";
+        }
+
+        fout << userId;
+        first = false;
+    }
+
+    fout << "\"" << std::endl;
+
     fout.close();
 
-    Simulator::Schedule(Seconds(10.0), &MyBuilding::WriteActiveUserLog);
+    Simulator::Schedule(
+        Seconds(10.0),
+        &MyBuilding::WriteActiveUserLog
+    );
 }
 
 void MyBuilding::Write_Logfile_for_simulation_environment(){
