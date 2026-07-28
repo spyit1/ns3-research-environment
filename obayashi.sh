@@ -1,13 +1,13 @@
 #!/usr/bin/bash
 foldername="ferry2"
 num_run=1
-simtime=200
+simtime=2000
 mode="ON"
 quickhello="QuickHello_ON"
 eraseinfo="EraseBlock_ON"
-user_num="500"
+user_num="120"
 z=1
-A_d=20000
+A_d=1000
 #p_mode = 2 #1=simple 2=DTN
 cd ~/ns-allinone-3.35/ns-3.35
 for((i=0;i<2;i++))

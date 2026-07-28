@@ -66,6 +66,101 @@ private:
 };
 std::ostream &operator << (std::ostream &os,TypeHeader const &h);
 
+class FragmentHeader : public Header
+{
+public:
+        FragmentHeader();
+
+        static TypeId GetTypeId(void);
+        TypeId GetInstanceTypeId(void) const;
+
+        uint32_t GetSerializedSize(void) const;
+        void Serialize(Buffer::Iterator start) const;
+        uint32_t Deserialize(Buffer::Iterator start);
+        void Print(std::ostream &os) const;
+
+        void SetTransferId(uint32_t transferId)
+        {
+                m_transferId = transferId;
+        }
+
+        uint32_t GetTransferId(void) const
+        {
+                return m_transferId;
+        }
+
+        void SetTotalDataSize(uint32_t totalDataSize)
+        {
+                m_totalDataSize = totalDataSize;
+        }
+
+        uint32_t GetTotalDataSize(void) const
+        {
+                return m_totalDataSize;
+        }
+
+        void SetTotalChunks(uint32_t totalChunks)
+        {
+                m_totalChunks = totalChunks;
+        }
+
+        uint32_t GetTotalChunks(void) const
+        {
+                return m_totalChunks;
+        }
+
+        void SetChunkIndex(uint32_t chunkIndex)
+        {
+                m_chunkIndex = chunkIndex;
+        }
+
+        uint32_t GetChunkIndex(void) const
+        {
+                return m_chunkIndex;
+        }
+
+        void SetChunkDataSize(uint32_t chunkDataSize)
+        {
+                m_chunkDataSize = chunkDataSize;
+        }
+
+        uint32_t GetChunkDataSize(void) const
+        {
+                return m_chunkDataSize;
+        }
+
+private:
+        /*
+         * 一連の分割送信を識別する番号
+         */
+        uint32_t m_transferId;
+
+        /*
+         * 分割前のデータ全体サイズ
+         */
+        uint32_t m_totalDataSize;
+
+        /*
+         * 分割パケットの総数
+         */
+        uint32_t m_totalChunks;
+
+        /*
+         * このパケットが何番目か
+         *
+         * 1から始める
+         */
+        uint32_t m_chunkIndex;
+
+        /*
+         * このパケットに入っているデータサイズ
+         */
+        uint32_t m_chunkDataSize;
+};
+
+std::ostream &
+operator<<(std::ostream &os, FragmentHeader const &header);
+
 
 class UserData: public Header
 {

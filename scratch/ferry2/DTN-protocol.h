@@ -24,6 +24,7 @@
 #include <string>
 #include <sstream>
 #include <list>
+#include <set>
 
 #include "data-counter.h"
 //#include "P2P-packet.h"
@@ -264,6 +265,62 @@ private:
 
 //	static std::set<String> fullexitnodeid;
 //	static String findfullexitnodeid;
+
+	        /*
+         * 分割データを識別するためのキー
+         *
+         * 同じtransferIdでも送信者が異なる可能性があるため、
+         * 送信元IPアドレスとtransferIdの組み合わせで管理する。
+         */
+        struct FragmentKey
+        {
+                Ipv4Address sender;
+                uint32_t transferId;
+
+                bool operator<(const FragmentKey &other) const
+                {
+                        if (sender.Get() != other.sender.Get())
+                        {
+                                return sender.Get()
+                                        < other.sender.Get();
+                        }
+
+                        return transferId
+                                < other.transferId;
+                }
+        };
+
+        /*
+         * 一つの分割データの受信状況
+         */
+        struct FragmentReceiveBuffer
+        {
+                uint32_t totalDataSize;
+                uint32_t totalChunks;
+                uint32_t receivedBytes;
+
+                std::set<uint32_t> receivedChunks;
+
+                FragmentReceiveBuffer()
+                        : totalDataSize(0),
+                          totalChunks(0),
+                          receivedBytes(0)
+                {
+                }
+        };
+
+        /*
+         * 受信途中の分割データ
+         */
+        std::map<
+                FragmentKey,
+                FragmentReceiveBuffer
+        > m_fragmentReceiveBuffers;
+
+        /*
+         * 自分が送信するデータの識別番号
+         */
+        uint32_t m_nextTransferId = 0;
 
 
 private:

@@ -2046,53 +2046,358 @@ RoutingProtocol::ProcessRequestBuffer()
     m_requestCollecting = false;
 }
 
-void RoutingProtocol::SendUserDataAsUnicast(UserData data, Hop hop, Ipv4Address destination){
-	RoutingTableEntry toDst;
-	RoutingTable rtable;
-	Ptr<MyUser> node = m_ipv4->GetObject<MyUser>();
-	uint32_t id = node->GetUserId() + 1;
-	SetRoute(destination,destination);
-	if(!m_routingTable.LookupRoute(destination,toDst)){
-		std::cout<<"ルートないぜ！！！！！！！！！"<<std::endl;
-		return;
-	}
+void RoutingProtocol::SendUserDataAsUnicast(
+    UserData data,
+    Hop hop,
+    Ipv4Address destination)
+{
+    RoutingTableEntry toDst;
+    RoutingTable rtable;
 
-	// Hop hop(node->GetHop());
+    Ptr<MyUser> node = m_ipv4->GetObject<MyUser>();
+    uint32_t id = node->GetUserId() + 1;
 
-	Ptr<Socket> socket=FindSocketWithInterfaceAddress (toDst.GetInterface());
-	Ptr<Packet> packet = Create<Packet> ();
-	if(MyBuilding::GetSendHopFlag() == true){
-		packet->AddHeader (hop);
-	}
-	packet->AddHeader (data);
-	TypeHeader tHeader (TYPE_USERDATA);
-	packet->AddHeader (tHeader);
+    SetRoute(destination, destination);
 
-	MyBuilding::PlusSendUserDataNum();
-	MyBuilding::PlusSendUserDataBytes(packet->GetSize());
+    if (!m_routingTable.LookupRoute(destination, toDst))
+    {
+        std::cout
+            << "ルートないぜ！！！！！！！！！"
+            << std::endl;
 
-	//OutputText_SendUserDataInfo(
-		//id,
-		//destination,
-		//packet->GetSize()
-	//);
+        return;
+    }
 
-	node->SetAlreadySentAddress(destination); //送信済みのアドレスとしてセットする
-	std::ofstream writing_file;
+    Ptr<Socket> socket =
+        FindSocketWithInterfaceAddress(
+            toDst.GetInterface()
+        );
 
-	String quickhello="QuickHello_ON";
-	if(simple::RoutingProtocol::GetUseQuickHelloflag()){
-		quickhello="QuickHello_ON";
-	}else{
-		quickhello="QuickHello_OFF";
-	}
+    if (socket == nullptr)
+    {
+        std::cout
+            << "[SendUserDataAsUnicast]"
+            << " 使用可能なSocketがありません"
+            << " destination=" << destination
+            << std::endl;
 
-	std::string filename = "obayashiIOFiles/Log/obayashi/ON/" + quickhello + "/" + std::to_string(MyBuilding::GetNumUsers())+"/testLog/Send_time.txt";
-	writing_file.open(filename, std::ios::app);
-	writing_file << id+1 <<", "<< destination <<", "<<Simulator::Now().GetDouble()/1000000000<<std::endl;
-	dataevent = Simulator::Schedule (Time (MilliSeconds (m_uniformRandomVariable->GetInteger (0, 100))),
-			&RoutingProtocol::SendTo, this, socket, packet, destination, USERDATA_PACKET);
+        return;
+    }
 
+    /*
+     * 分割前のデータ全体サイズ
+     *
+     * 現在は500000 byteに固定。
+     * 後からenvironment.csvなどから
+     * 読み込む形へ変更できる。
+     */
+    const uint32_t totalDataSize = 500000;
+
+    /*
+     * 1パケットに入れる最大ペイロードサイズ
+     */
+    const uint32_t maxChunkSize = 60000;
+
+    /*
+     * データサイズが0の場合は送信しない。
+     */
+    if (totalDataSize == 0)
+    {
+        std::cout
+            << "[SendUserDataAsUnicast]"
+            << " totalDataSizeが0のため送信しません"
+            << std::endl;
+
+        return;
+    }
+
+    /*
+     * 必要な分割数を切り上げで計算する。
+     *
+     * 500000 byteの場合：
+     *
+     * (500000 + 60000 - 1) / 60000
+     * = 9パケット
+     */
+    const uint32_t numberOfChunks =
+        (totalDataSize + maxChunkSize - 1)
+        / maxChunkSize;
+
+    /*
+     * 今回の一連のUserData送信を識別する番号。
+     *
+     * 同じデータを分割したパケットには、
+     * すべて同じtransferIdを付ける。
+     */
+    m_nextTransferId++;
+
+    /*
+     * uint32_tが最大値から0へ戻った場合に、
+     * 0を使わないようにする。
+     */
+    if (m_nextTransferId == 0)
+    {
+        m_nextTransferId = 1;
+    }
+
+    const uint32_t transferId =
+        m_nextTransferId;
+
+    /*
+     * 最初のパケットを送信するまでの待ち時間。
+     */
+    uint32_t baseDelay =
+        m_uniformRandomVariable->GetInteger(
+            0,
+            100
+        );
+
+    /*
+     * まだ送信していないデータサイズ。
+     */
+    uint32_t remainingDataSize =
+        totalDataSize;
+
+    std::cout
+        << "[SendUserDataStart]"
+        << " senderId=" << id
+        << ", destination=" << destination
+        << ", transferId=" << transferId
+        << ", totalDataSize=" << totalDataSize
+        << ", totalChunks=" << numberOfChunks
+        << std::endl;
+
+    for (uint32_t chunkIndex = 0;
+         chunkIndex < numberOfChunks;
+         chunkIndex++)
+    {
+        /*
+         * 残りが60000 byte以上なら60000 byte。
+         * 60000 byte未満なら残り全部。
+         */
+        uint32_t currentChunkSize =
+            std::min(
+                maxChunkSize,
+                remainingDataSize
+            );
+
+        /*
+         * currentChunkSize分の
+         * ダミーペイロードを生成する。
+         */
+        Ptr<Packet> packet =
+            Create<Packet>(
+                currentChunkSize
+            );
+
+        /*
+         * Hopヘッダを使用する場合は、
+         * 最初に追加する。
+         *
+         * AddHeaderは先頭へ追加されるため、
+         * 後から追加したヘッダほど前に配置される。
+         */
+        if (MyBuilding::GetSendHopFlag()
+            == true)
+        {
+            packet->AddHeader(hop);
+        }
+
+        /*
+         * 既存の災害情報を持つUserDataヘッダ。
+         *
+         * すべての分割パケットに
+         * 同じUserDataヘッダを付ける。
+         */
+        packet->AddHeader(data);
+
+        /*
+         * 分割情報を格納するヘッダ。
+         */
+        FragmentHeader fragmentHeader;
+
+        fragmentHeader.SetTransferId(
+            transferId
+        );
+
+        fragmentHeader.SetTotalDataSize(
+            totalDataSize
+        );
+
+        fragmentHeader.SetTotalChunks(
+            numberOfChunks
+        );
+
+        /*
+         * 分割番号は1から始める。
+         */
+        fragmentHeader.SetChunkIndex(
+            chunkIndex + 1
+        );
+
+        fragmentHeader.SetChunkDataSize(
+            currentChunkSize
+        );
+
+        packet->AddHeader(
+            fragmentHeader
+        );
+
+        /*
+         * パケット種別を示すTypeHeaderを
+         * 最後に追加する。
+         *
+         * 実際のパケット構造：
+         *
+         * TypeHeader
+         * FragmentHeader
+         * UserData
+         * Hop
+         * Payload
+         */
+        TypeHeader tHeader(
+            TYPE_USERDATA
+        );
+
+        packet->AddHeader(
+            tHeader
+        );
+
+        /*
+         * 分割パケット単位で送信数を加算。
+         */
+        MyBuilding::PlusSendUserDataNum();
+
+        /*
+         * TypeHeader、FragmentHeader、
+         * UserData、Hop、Payloadを含む
+         * 実際のPacketサイズを加算。
+         */
+        MyBuilding::PlusSendUserDataBytes(
+            packet->GetSize()
+        );
+
+        std::cout
+            << "[SendUserDataFragment]"
+            << " senderId=" << id
+            << ", destination=" << destination
+            << ", transferId=" << transferId
+            << ", chunk=" << chunkIndex + 1
+            << "/" << numberOfChunks
+            << ", payloadSize="
+            << currentChunkSize
+            << ", actualPacketSize="
+            << packet->GetSize()
+            << ", remainingBeforeSend="
+            << remainingDataSize
+            << " byte"
+            << std::endl;
+
+        /*
+         * 分割パケット同士を10ms間隔で送信する。
+         *
+         * chunkIndexが0の場合：
+         * baseDelay
+         *
+         * chunkIndexが1の場合：
+         * baseDelay + 10ms
+         */
+        Simulator::Schedule(
+            MilliSeconds(
+                baseDelay
+                + chunkIndex * 10
+            ),
+            &RoutingProtocol::SendTo,
+            this,
+            socket,
+            packet,
+            destination,
+            USERDATA_PACKET
+        );
+
+        /*
+         * 今回送信したペイロードサイズを
+         * 残りのデータサイズから引く。
+         */
+        remainingDataSize -=
+            currentChunkSize;
+    }
+
+    std::cout
+        << "[SendUserDataScheduled]"
+        << " senderId=" << id
+        << ", destination=" << destination
+        << ", transferId=" << transferId
+        << ", scheduledChunks="
+        << numberOfChunks
+        << ", remainingDataSize="
+        << remainingDataSize
+        << std::endl;
+
+    /*
+     * destinationへ送信済みであることを記録。
+     */
+    node->SetAlreadySentAddress(
+        destination
+    );
+
+    std::ofstream writing_file;
+
+    String quickhello =
+        "QuickHello_ON";
+
+    if (simple::RoutingProtocol::
+        GetUseQuickHelloflag())
+    {
+        quickhello =
+            "QuickHello_ON";
+    }
+    else
+    {
+        quickhello =
+            "QuickHello_OFF";
+    }
+
+    std::string filename =
+        "obayashiIOFiles/Log/obayashi/ON/"
+        + quickhello
+        + "/"
+        + std::to_string(
+            MyBuilding::GetNumUsers()
+        )
+        + "/testLog/Send_time.txt";
+
+    writing_file.open(
+        filename,
+        std::ios::app
+    );
+
+    if (writing_file.is_open())
+    {
+        writing_file
+            << id
+            << ", "
+            << destination
+            << ", "
+            << transferId
+            << ", "
+            << totalDataSize
+            << ", "
+            << numberOfChunks
+            << ", "
+            << Simulator::Now().
+                GetDouble()
+                / 1000000000
+            << std::endl;
+    }
+    else
+    {
+        std::cout
+            << "[SendUserDataAsUnicast]"
+            << " Send_time.txtを開けません"
+            << " filename=" << filename
+            << std::endl;
+    }
 }
 
 void merge_min(std::map<std::string, uint32_t>& a,
@@ -2345,245 +2650,273 @@ void RoutingProtocol::RecvShelterDataAsBroadcast(Ptr<Packet> p, Ipv4Address myAd
 }
 
 
-void RoutingProtocol::RecvUserDataAsUnicast(Ptr<Packet> p, Ipv4Address receiver, Ipv4Address sender){
+void RoutingProtocol::RecvUserDataAsUnicast(
+        Ptr<Packet> p,
+        Ipv4Address receiver,
+        Ipv4Address sender)
+{
+        /*
+         * TypeHeaderはRecvProto()ですでに取り外されている。
+         */
+        uint32_t recvSize = p->GetSize();
 
-	uint32_t recvSize = p->GetSize();
+        /*
+         * 分割パケット単位の受信数・受信サイズ
+         */
+        MyBuilding::PlusRecvUserDataNum();
+        MyBuilding::PlusRecvUserDataBytes(
+                recvSize
+        );
 
-	MyBuilding::PlusRecvUserDataNum();
-    MyBuilding::PlusRecvUserDataBytes(recvSize);
+        /*
+         * 分割ヘッダを取り外す
+         */
+        FragmentHeader fragmentHeader;
 
-	if (IsNearShelter(200.0)) {
-		MyBuilding::PlusNearShelterRecvUserDataNum();
+        uint32_t removedSize =
+                p->RemoveHeader(fragmentHeader);
+
+        if (removedSize == 0)
+        {
+                std::cout
+                        << "[RecvUserDataFragment]"
+                        << " FragmentHeaderがありません"
+                        << std::endl;
+
+                return;
+        }
+
+        uint32_t transferId =
+                fragmentHeader.GetTransferId();
+
+        uint32_t totalDataSize =
+                fragmentHeader.GetTotalDataSize();
+
+        uint32_t totalChunks =
+                fragmentHeader.GetTotalChunks();
+
+        uint32_t chunkIndex =
+                fragmentHeader.GetChunkIndex();
+
+        uint32_t chunkDataSize =
+                fragmentHeader.GetChunkDataSize();
+
+        /*
+         * ヘッダ値の妥当性確認
+         */
+        if (totalChunks == 0
+                || chunkIndex == 0
+                || chunkIndex > totalChunks
+                || chunkDataSize > totalDataSize)
+        {
+                std::cout
+                        << "[RecvUserDataFragment]"
+                        << " Invalid fragment"
+                        << " sender=" << sender
+                        << " transferId=" << transferId
+                        << " chunk=" << chunkIndex
+                        << "/" << totalChunks
+                        << " chunkDataSize="
+                        << chunkDataSize
+                        << std::endl;
+
+                return;
+        }
+
+        FragmentKey key;
+
+        key.sender = sender;
+        key.transferId = transferId;
+
+        FragmentReceiveBuffer &buffer =
+                m_fragmentReceiveBuffers[key];
+
+        /*
+         * 最初に受信した分割パケットの場合
+         */
+        if (buffer.receivedChunks.empty())
+        {
+                buffer.totalDataSize =
+                        totalDataSize;
+
+                buffer.totalChunks =
+                        totalChunks;
+
+                buffer.receivedBytes = 0;
+        }
+        else
+        {
+                /*
+                 * 同じ送信データなのに情報が異なる場合
+                 */
+                if (buffer.totalDataSize
+                                != totalDataSize
+                        || buffer.totalChunks
+                                != totalChunks)
+                {
+                        std::cout
+                                << "[RecvUserDataFragment]"
+                                << " Fragment information mismatch"
+                                << " sender=" << sender
+                                << " transferId=" << transferId
+                                << std::endl;
+
+                        return;
+                }
+        }
+
+        /*
+         * 分割番号を保存
+         */
+        std::pair<
+                std::set<uint32_t>::iterator,
+                bool
+        > insertResult =
+                buffer.receivedChunks.insert(
+                        chunkIndex
+                );
+
+        /*
+         * 同じ番号をすでに受信していた場合
+         */
+        if (!insertResult.second)
+        {
+                std::cout
+                        << "[RecvUserDataFragment]"
+                        << " Duplicate fragment"
+                        << " sender=" << sender
+                        << " transferId=" << transferId
+                        << " chunk=" << chunkIndex
+                        << "/" << totalChunks
+                        << std::endl;
+
+                return;
+        }
+
+        buffer.receivedBytes +=
+                chunkDataSize;
+
+        std::cout
+                << "[RecvUserDataFragment]"
+                << " sender=" << sender
+                << " receiver=" << receiver
+                << " transferId=" << transferId
+                << " chunk=" << chunkIndex
+                << "/" << totalChunks
+                << " chunkSize=" << chunkDataSize
+                << " receivedChunks="
+                << buffer.receivedChunks.size()
+                << "/" << buffer.totalChunks
+                << " receivedBytes="
+                << buffer.receivedBytes
+                << "/" << buffer.totalDataSize
+                << std::endl;
+
+        /*
+         * 1番からtotalChunks番まで全部揃ったか確認
+         */
+        bool allChunksReceived = true;
+
+        for (uint32_t index = 1;
+             index <= buffer.totalChunks;
+             index++)
+        {
+                if (buffer.receivedChunks.count(index)
+                        == 0)
+                {
+                        allChunksReceived = false;
+                        break;
+                }
+        }
+
+        /*
+         * まだ全部揃っていない場合
+         */
+        if (!allChunksReceived)
+        {
+                return;
+        }
+
+        /*
+         * 全番号は揃っているが、
+         * サイズ合計が違う場合
+         */
+        if (buffer.receivedBytes
+                != buffer.totalDataSize)
+        {
+                std::cout
+                        << "[RecvUserDataComplete]"
+                        << " Data size mismatch"
+                        << " sender=" << sender
+                        << " transferId=" << transferId
+                        << " receivedBytes="
+                        << buffer.receivedBytes
+                        << " expectedBytes="
+                        << buffer.totalDataSize
+                        << std::endl;
+
+                m_fragmentReceiveBuffers.erase(key);
+
+                return;
+        }
+
+        std::cout
+                << "[RecvUserDataComplete]"
+                << " sender=" << sender
+                << " receiver=" << receiver
+                << " transferId=" << transferId
+                << " chunks="
+                << buffer.totalChunks
+                << " receivedBytes="
+                << buffer.receivedBytes
+                << std::endl;
+
+        /*
+         * 受信完了したため管理情報を削除
+         */
+        m_fragmentReceiveBuffers.erase(key);
+
+        /*
+         * ここから下で初めて、
+         * 一つのUserDataを受け取ったとして処理する。
+         */
+        if (IsNearShelter(200.0))
+        {
+                MyBuilding::
+                        PlusNearShelterRecvUserDataNum();
+        }
+
+        std::cout
+                << "[RecvUserData]"
+                << " sender=" << sender
+                << " receiver=" << receiver
+                << std::endl;
+
+        OutputText_Recive_Data(
+                sender,
+                receiver
+        );
+
+        NS_LOG_FUNCTION(
+                this << " src " << sender
+        );
+
+        UserData data;
+        p->RemoveHeader(data);
+
+        Hop hop;
+
+        if (MyBuilding::GetSendHopFlag()
+                == true)
+        {
+                p->RemoveHeader(hop);
+        }
+
+
+        /*
+         * ここから下は既存コードをそのまま残す
+         */
 	}
-
-	std::cout
-	<< "[RecvUserData]"
-	<< " sender=" << sender
-	<< " receiver=" << receiver
-	<< std::endl;
-
-	//std::cout << "送信元：" << sender << "受信者"<< receiver << std::endl;
-	OutputText_Recive_Data(sender,receiver);
-	 //Helloを開始していないときは開始する
-	NS_LOG_FUNCTION (this << " src " << sender);
-
-	UserData data;
-	p->RemoveHeader (data);
-	Hop hop;
-	if(MyBuilding::GetSendHopFlag() == true){
-		p->RemoveHeader (hop);
-	}
-	bool newdataflag = false;
-
-	Ptr<MyUser> user = m_ipv4->GetObject<MyUser>();
-
-	std::set<String> blockednode = data.GetBlockedNodeIDSet();
-	std::set<String> fullexitnode_set = data.GetFullExitNodeIDSet();
-	std::map<uint32_t, std::pair<std::pair<String, uint32_t>,uint32_t>> hop_map = hop.GetHop();
-	std::map<uint32_t, std::pair<std::pair<String, uint32_t>,uint32_t>> already_have_hop = user->GetHop();		
-	std::map<String, std::pair<uint32_t, uint32_t>> AoIexitinfo = data.GetAoIExitinfo(); //受け取った避難所情報
-	std::map<String, std::pair<uint32_t, uint32_t>> old_AoIexitinfo = user->GetAoiExitinfo();//すでに所持している避難所情報
-	std::map<String, float> AoIblockedinfo = data.GetAoIBlockedInfo();
-	std::map<String, float> old_AoIblockedinfo = user->GetBlockedNodeID_and_time();
-
-	for(auto a : fullexitnode_set){
-		// std::cout<<a<<std::endl;
-		user->SetFullexitNodeID(a);
-	}
-
-	// if(hop_map.size()>0){
-	// 	// std::cout<<"----------"<<user->GetUserId()<<"：ユニキャスト受信データ----------"<<std::endl;
-	// 	for(auto a : hop_map){
-	// 		// 新しいまたは，所持していないデータしか来ないはずなので上書きする．
-	// 		if(a.second.second > 0){
-	// 			// 避難所まで所要時間が0以上のもののみ追加する．
-	// 			user->UpdateHop(a.first, a.second);
-	// 			// std::cout<<"Ipv4："<<a.first<<", 目標避難所："<<a.second.first<<", 所要時間："<<a.second.second<<std::endl;
-	// 		}
-	// 	}
-	// }
-	// user->SetEraseHopTimer();
-
-	// if(user->GetHop().size()>0){
-	// 	std::cout<<"----------"<<user->GetUserId()<<"：Hopデータ----------"<<std::endl;
-	// 	for(auto a : user->GetHop()){
-	// 		std::cout<<"Ipv4："<<a.first<<", 目標避難所："<<a.second.first<<", 所要時間："<<a.second.second<<std::endl;
-	// 	}
-	// }
-
-
-///////////////////////受信データLOG出力////////////////////////////////////////////////
-	std::ofstream writing_file;
-	std::string filename = "obayashiIOFiles/Log/obayashi/ON/"+std::to_string(MyBuilding::GetNumUsers())+"/testLog/Recv_data.txt";
-	writing_file.open(filename, std::ios::app);
-	writing_file<<std::endl<<"time: "<<Simulator::Now().GetDouble()/1000000000<<std::endl;
-	writing_file << sender << " -> "<< receiver << std::endl;
-	writing_file << "data: "<< "blockedid = ";
-	// uint32_t UserID = user->GetUserId() + 1;
-	// std::cout << UserID <<"：";
-	for(auto blockedid : blockednode){	
-		writing_file << blockedid <<", " ;
-		user->SetBlockedNodeID(blockedid); //ブロック情報更新
-		// user->UpdateGraphInfoReceivedPacket(blockedid);//グラフを更新することで経路を更新？
-	}
-	writing_file << std::endl;
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////AoI比較////////////////////////////////////////////////////////
-
-	// bool find_new_data_flag = false;
-
-	for(auto newdata : AoIexitinfo){
-		uint32_t recv_data_aoi;
-		uint32_t old_data_aoi;
-		uint32_t recv_data_can_exitnum;
-		String shelterID = newdata.first;
-
-		recv_data_aoi = newdata.second.second; //受信したデータの生成時間を取得
-		// std::cout<<shelterID<<std::endl;
-		// std::cout<<user->GetUserId()<<std::endl;
-		old_data_aoi = old_AoIexitinfo.at(shelterID).second; //すでに所持しているデータの時間を取得
-
-		recv_data_can_exitnum = newdata.second.first;
-
-		if(old_data_aoi > recv_data_aoi){ //データの生成時間で比較
-			// std::cout<<"すでに新しい情報に更新されてしまいました"<<std::endl;
-			// std::cout<<"old_data_aoi = "<<old_data_aoi<<", recv_data_aoi = "<<recv_data_aoi<<std::endl; //debag
-		}
-		if(old_data_aoi == recv_data_aoi){
-			// std::cout<<"タイミングのズレで同じ情報が送られてきている？(====)"<<std::endl;
-		}
-		if(old_data_aoi < recv_data_aoi){
-			// std::cout<<"ユニキャストで新しいデータが返って来ました"<<std::endl; //debag
-			std::pair<uint32_t, uint32_t> old_num_time = old_AoIexitinfo.at(shelterID);
-			old_AoIexitinfo.erase(shelterID);
-			old_AoIexitinfo.insert(std::make_pair(shelterID, std::make_pair(recv_data_can_exitnum, recv_data_aoi)));
-			// std::cout<<recv_data_aoi<<std::endl; //debag
-			double increase_rate = double(old_num_time.first - recv_data_can_exitnum) / double(recv_data_aoi - old_num_time.second);
-			user->SetIncreaseRate(shelterID, increase_rate);
-			user->SetAoiExitinfo(old_AoIexitinfo); //更新されたデータをセット
-			newdataflag = true;
-		}
-	}
-
-	for(auto newdata : AoIblockedinfo){
-		float recv_data_aoi;
-		float old_data_aoi;
-		String shelterID = newdata.first;
-
-		recv_data_aoi = newdata.second; //受信したデータの生成時間を取得
-
-		try{
-			old_data_aoi = old_AoIblockedinfo.at(shelterID); //すでに所持しているデータの時間を取得
-		}catch(std::out_of_range& oor){
-			// std::cout<<"持っていないで通行止め情報が送られてきました"<<std::endl; //debag
-			double aoi = (Simulator::Now().GetDouble()/1000000000) - recv_data_aoi;
-			if(eraseinfoflag == true){
-				if(aoi < MyBuilding::GetEraseAoI()){
-					newdataflag = true;
-					old_AoIblockedinfo.erase(shelterID);
-					old_AoIblockedinfo.insert(std::make_pair(shelterID, recv_data_aoi));
-					user->SetBlockedNodeID_and_time2(old_AoIblockedinfo); //更新されたデータをセット
-					user->SetBlockedNodeID_and_time_for_Log2(old_AoIblockedinfo);
-					user->UpdateGraphInfoReceivedPacket(shelterID);
-					// old_AoIblockedinfo = user->GetBlockedNodeID_and_time();
-				}else{
-					// std::cout<<"自分は所持してないけどしきい値より大きいので破棄します"<<std::endl; //debag
-				}
-			}else{
-				newdataflag = true;
-				old_AoIblockedinfo.erase(shelterID);
-				old_AoIblockedinfo.insert(std::make_pair(shelterID, recv_data_aoi));
-				user->SetBlockedNodeID_and_time2(old_AoIblockedinfo); //更新されたデータをセット
-				user->SetBlockedNodeID_and_time_for_Log2(old_AoIblockedinfo);
-				user->UpdateGraphInfoReceivedPacket(shelterID);
-			}
-		}
-
-		if(old_data_aoi > recv_data_aoi){ //データの生成時間で比較
-			// std::cout<<shelterID<<std::endl;
-			// std::cout<<"タイミングのズレで直前に他のユニキャストで更新されてるのでは？"<<std::endl; //debag
-			// std::cout<<"old_data_aoi = "<<old_data_aoi<<", recv_data_aoi = "<<recv_data_aoi<<std::endl; //debag
-		}
-		if(old_data_aoi == recv_data_aoi){
-			// std::cout<<"タイミングのズレで同じ情報が送られてきている？(====)"<<std::endl; //debag
-		}
-		if(old_data_aoi < recv_data_aoi){
-			double aoi = (Simulator::Now().GetDouble()/1000000000) - recv_data_aoi;
-			if(eraseinfoflag == true){
-				if(aoi < MyBuilding::GetEraseAoI()){
-					std::cout<<"新しい通行止め箇所データがユニキャストにより返って来ました"<<std::endl; //debag
-					old_AoIblockedinfo.erase(shelterID);
-					old_AoIblockedinfo.insert(std::make_pair(shelterID, recv_data_aoi));
-					user->SetBlockedNodeID_and_time2(old_AoIblockedinfo); //更新されたデータをセット
-					user->SetBlockedNodeID_and_time_for_Log2(old_AoIblockedinfo);
-					user->UpdateGraphInfoReceivedPacket(shelterID);
-					newdataflag = true;
-				}else{
-					// std::cout<<MyBuilding::GetEraseAoI()<<"以上なので破棄します"<<std::endl; //debag
-				}
-			}else{
-				old_AoIblockedinfo.erase(shelterID);
-				old_AoIblockedinfo.insert(std::make_pair(shelterID, recv_data_aoi));
-				user->SetBlockedNodeID_and_time2(old_AoIblockedinfo); //更新されたデータをセット
-				user->SetBlockedNodeID_and_time_for_Log2(old_AoIblockedinfo);
-				user->UpdateGraphInfoReceivedPacket(shelterID);
-				newdataflag = true;
-			}
-		}
-	}
-
-	//Hopデータ比較
-	if(MyBuilding::GetSendHopFlag() == true){
-		for(auto hop : hop_map){
-			try{
-				std::pair<std::pair<String,uint32_t>,uint32_t> compdata = already_have_hop.at(hop.first);
-				if(hop.second.second <= compdata.second){
-					//古いか同じ情報を受信
-				}else{
-					//新しい情報を受信
-					user->UpdateHop(hop.first, hop.second);
-					user->SetEraseHopTimer();
-					// newdataflag = true;
-				}
-			}catch(std::out_of_range& oor){
-				//所持していない情報を受信
-				user->SetHop(hop.first, hop.second);
-				user->SetEraseHopTimer();
-				// newdataflag = true;
-			}
-			
-		}
-	}
-
-	if(GetUseQuickHelloflag() == true && newdataflag == true && user->GetWhileQuickHelloFlag() == false && nodeType != FERRY_NODE){
-		user->SetAlreadyQuickSendFlag(true);
-		SendHello(); //Quicksendの場合は新しい情報を受け取るとすぐHelloを送信する
-	}
-
-	std::ofstream writing_file2;
-	std::string filename2 = "obayashiIOFiles/Log/obayashi/ON/"+std::to_string(MyBuilding::GetNumUsers())+"/testLog/Recv_time.txt";
-	writing_file2.open(filename2, std::ios::app);
-	writing_file2 << sender << " ,"<< receiver <<", "<<Simulator::Now().GetDouble()/1000000000<<std::endl;
-	std::set<String> blockednode2 = user->GetBlockedNodeIDSet();
-	String kara;
-	blockednode2.erase(kara);
-	// now = blockednode2.size();
-
-
-	Ptr<MyUser> debugUser = m_ipv4->GetObject<MyUser>();
-
-	std::cout
-	<< "[AfterRecvUserData] userId="
-	<< debugUser->GetUserId()+1
-	<< " exitInfo="
-	<< debugUser->GetAoiExitinfo().size()
-	<< " blockInfo="
-	<< debugUser->GetBlockedNodeID_and_time().size()
-	<< std::endl;
-
-}
-
 
 void RoutingProtocol::CheckAoI(){
 	Ptr<MyUser> user = m_ipv4->GetObject<MyUser>();

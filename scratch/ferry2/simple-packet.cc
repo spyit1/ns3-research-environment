@@ -384,6 +384,99 @@ operator << (std::ostream &os, RequestData const &h)
 }
 
 
+NS_OBJECT_ENSURE_REGISTERED(FragmentHeader);
+
+FragmentHeader::FragmentHeader()
+        : m_transferId(0),
+          m_totalDataSize(0),
+          m_totalChunks(0),
+          m_chunkIndex(0),
+          m_chunkDataSize(0)
+{
+}
+
+TypeId
+FragmentHeader::GetTypeId(void)
+{
+        static TypeId tid =
+                TypeId("ns3::simple::FragmentHeader")
+                        .SetParent<Header>()
+                        .AddConstructor<FragmentHeader>();
+
+        return tid;
+}
+
+TypeId
+FragmentHeader::GetInstanceTypeId(void) const
+{
+        return GetTypeId();
+}
+
+uint32_t
+FragmentHeader::GetSerializedSize(void) const
+{
+        /*
+         * uint32_tが5個
+         *
+         * 4 byte × 5 = 20 byte
+         */
+        return 20;
+}
+
+void
+FragmentHeader::Serialize(Buffer::Iterator start) const
+{
+        Buffer::Iterator i = start;
+
+        i.WriteU32(m_transferId);
+        i.WriteU32(m_totalDataSize);
+        i.WriteU32(m_totalChunks);
+        i.WriteU32(m_chunkIndex);
+        i.WriteU32(m_chunkDataSize);
+}
+
+uint32_t
+FragmentHeader::Deserialize(Buffer::Iterator start)
+{
+        Buffer::Iterator i = start;
+
+        m_transferId = i.ReadU32();
+        m_totalDataSize = i.ReadU32();
+        m_totalChunks = i.ReadU32();
+        m_chunkIndex = i.ReadU32();
+        m_chunkDataSize = i.ReadU32();
+
+        uint32_t distance =
+                i.GetDistanceFrom(start);
+
+        NS_ASSERT(
+                distance == GetSerializedSize()
+        );
+
+        return distance;
+}
+
+void
+FragmentHeader::Print(std::ostream &os) const
+{
+        os
+                << "transferId=" << m_transferId
+                << ", totalDataSize=" << m_totalDataSize
+                << ", totalChunks=" << m_totalChunks
+                << ", chunkIndex=" << m_chunkIndex
+                << ", chunkDataSize=" << m_chunkDataSize;
+}
+
+std::ostream &
+operator<<(
+        std::ostream &os,
+        FragmentHeader const &header)
+{
+        header.Print(os);
+        return os;
+}
+
+
 NS_OBJECT_ENSURE_REGISTERED(UserData);
 TypeId UserData::GetTypeId ()
 {
