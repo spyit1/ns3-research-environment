@@ -250,19 +250,22 @@ void JSON_Data::precalculate_shortest_paths() {
         std::map<Pos, Pos> parent;
         dijkstra_pair(u_coord, nodes, dist, parent);
 
+		/*
         // (2) Multiple Goals Consideration: Identify the nearest shelter
-        //Pos target_shelter_coord = {-1.0, -1.0};
-        //Weight min_dist = inf;
+        Pos target_shelter_coord = {-1.0, -1.0};
+        Weight min_dist = inf;
 
         // hinanjo is the list of shelter coordinates
-        //for (const Pos& s_coord : exit) { 
+        for (const Pos& s_coord : exit) { 
             // Check if the shelter is reachable and closer
-            //if (dist.count(s_coord) && dist.at(s_coord) < min_dist) {
-                //min_dist = dist.at(s_coord);
-                //target_shelter_coord = s_coord;
-            //}
-        //}
+            if (dist.count(s_coord) && dist.at(s_coord) < min_dist) {
+                min_dist = dist.at(s_coord);
+                target_shelter_coord = s_coord;
+            }
+        }
+		*/
 
+		
 		// (2) Multiple Goals Consideration: Choose randomly from nearest 3 shelters
 		Pos target_shelter_coord = {-1.0, -1.0};
 
@@ -286,6 +289,7 @@ void JSON_Data::precalculate_shortest_paths() {
 
 			target_shelter_coord = shelter_candidates[random_index].second;
 		}
+		
         
         // (3) Store the shortest path if it exists
         if (target_shelter_coord.first != -1.0) {
