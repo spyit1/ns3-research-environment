@@ -708,6 +708,7 @@ void JSON_Data::json_input(){
 		今回指定無しはすべての災害に対応として扱う
 		*/
 
+		
 		//2026/07/01
 		double shelter_edge_margin_rate = 0.20;
 		double shelter_margin_lon = (longitude_max - longitude_min) * shelter_edge_margin_rate;
@@ -716,6 +717,7 @@ void JSON_Data::json_input(){
 		uint32_t shelter_total_in_map = 0;
 		uint32_t shelter_removed_edge = 0;
 		uint32_t shelter_used = 0;
+		
 
         while(1){
         	String s = "/features";
@@ -727,6 +729,7 @@ void JSON_Data::json_input(){
         	double y = js[json::json_pointer(s)][json::json_pointer("/geometry/coordinates/1")];
         	//if(x<longitude_max&&x>longitude_min&&y<latitude_max&&y>latitude_min){
 			//kokokara
+			
 			if(x < longitude_max && x > longitude_min &&
 				y < latitude_max  && y > latitude_min){
 
@@ -743,6 +746,7 @@ void JSON_Data::json_input(){
 					}
 
 					//kokomade
+					
 				String a = js[json::json_pointer(s)][json::json_pointer("/properties/P20_004")];
 
 				
@@ -785,9 +789,11 @@ void JSON_Data::json_input(){
         	}
         	i++;
         }
+		
 		std::cout << "DEBUG: Shelters in map = " << shelter_total_in_map << std::endl;
 		std::cout << "DEBUG: Shelters removed near edge = " << shelter_removed_edge << std::endl;
 		std::cout << "DEBUG: Shelters used = " << shelter_used << std::endl;
+		
     }
     else{
     	std::cout << "Not found data" << std::endl;

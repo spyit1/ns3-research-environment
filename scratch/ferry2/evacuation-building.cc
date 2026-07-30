@@ -577,7 +577,8 @@ void MyBuilding::WriteActiveUserLog()
             fout << " ";
         }
 
-        fout << userId;
+		fout << userId + 1;
+        //fout << userId;
         first = false;
     }
 

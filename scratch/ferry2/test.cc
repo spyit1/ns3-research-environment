@@ -170,7 +170,7 @@ private :
 	double field_Y;
 	uint32_t run;	
 	uint32_t seed;
-	uint32_t simtime = 1000;
+	uint32_t simtime = 4000000;
 	uint32_t delay_ratio;
 	uint32_t numPackets;   // number of nodes in the grid
 	uint32_t packetSize;   // size of application packet sent in bytes
@@ -1438,7 +1438,7 @@ void NetSim::ActivateReservedAddUsers()
 		addUser->SetWaitStatus(false);
 		addUser->SetMyUser();
 
-		simple::MyBuilding::AddActiveUser(nodeIndex + 1);
+		simple::MyBuilding::AddActiveUser(nodeIndex /*+ 1*/);
 
 		Ptr<simple::RoutingProtocol> obj =
 			addUser->GetObject<simple::RoutingProtocol>();
@@ -1580,7 +1580,7 @@ void NetSim::MakeNetworkTopologyforJSON()
 	}
 
 	for (uint32_t i = 0; i < simple::MyBuilding::GetNumUsers(); ++i) {
-		simple::MyBuilding::AddActiveUser(i + 1);
+		simple::MyBuilding::AddActiveUser(i /*+ 1*/);
 	}
 
 	for (uint32_t i=0; i<numferry; ++i)

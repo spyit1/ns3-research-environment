@@ -3223,9 +3223,9 @@ void RoutingProtocol::OutputText_NI (Time now_t, Ptr<Ipv4> m_ipv4, std::string c
           //<< " active = " << simple::MyBuilding::IsActiveUser(nodeid)
           //<< std::endl;
 		  
-	if (!simple::MyBuilding::IsActiveUser(nodeid)) {
-		return;
-	}
+	//if (!simple::MyBuilding::IsActiveUser(nodeid)) {
+		//return;
+	//}
 
 	fout.open(filename,std::ios::app);
 	fout << "NI, "										// Node Information

@@ -1553,7 +1553,7 @@ void MyUser::CompleteEvacuation (String ID)
 
 	if (MyBuilding::GetUserIdCompEvc().size() >= MyBuilding::GetNumUsers()+MyBuilding::GetAddUsersNum()) {
 		WriteLog::OutputEscapeInfo(MyBuilding::GetExitNodes()); //ログを出力
-		//Simulator::Stop(Seconds(1.0));
+		Simulator::Stop(Seconds(1.0));
 	}
 }
 
