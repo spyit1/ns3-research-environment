@@ -40,6 +40,8 @@
 #include "write_log.h"
 #include "DTN-helper.h"
 #include "DTN-protocol.h"
+#include "graph-feature.h"
+#include "graph-builder.h"
 
 #define SIMPLE 1
 #define DTN 2
@@ -79,6 +81,8 @@ public :
 	void Initialize_Logfile_for_HelloRecvTimeInfo();
 	void Initialize_Logfile_for_HelloSendTimeInfo();
 	void Write_crossing_latlon();
+
+	void CheckGraphFeatures();
 
 
 	uint32_t GetSimTime (void) {return simtime;}
@@ -1219,6 +1223,19 @@ void NetSim::OutputUserDataInfo(){
 	fout.close();
 }
 
+void
+NetSim::CheckGraphFeatures()
+{
+    GraphBuilder::BuildGraphFeatures(userNodes);
+
+	Simulator::Schedule(
+        Seconds(60.0),
+        &NetSim::CheckGraphFeatures,
+        this);
+}
+
+
+
 void NetSim::WriteBlockedNodeKnowledgeLog()
 {
         String mode = "ON";
@@ -1858,6 +1875,25 @@ void NetSim::MakeNetworkTopologyforJSON()
 		n_user[ii]->SetMyUser();
 	}
 
+	/*
+	if (userNodes.GetN() > 0)
+	{
+		GraphFeature feature =
+			CreateGraphFeature(1, userNodes.Get(1));
+
+		std::cout
+			<< "GraphFeature: userId=" << feature.userId
+			<< ", x=" << feature.x
+			<< ", y=" << feature.y
+			<< std::endl;
+	}
+	
+
+	std::vector<GraphFeature> features =
+    	GraphBuilder::BuildGraphFeatures(userNodes);
+
+	*/
+
 	// std::map<String, uint32_t> hinan = simple::MyBuilding::GetExitNodes();
 	for (auto itr = hinan.begin(); itr != hinan.end(); ++itr)
 	{
@@ -2213,6 +2249,12 @@ void NetSim::SetFlowMonitor ()
 	Simulator::Stop (Seconds (simtime));
 	Simulator::Schedule(Seconds(0.0), &simple::MyBuilding::WriteActiveUserLog);
 	Simulator::Schedule(Seconds(0.0), &NetSim::WriteBlockedNodeKnowledgeLog, this);
+
+	Simulator::Schedule(
+		Seconds(60.0),
+		&NetSim::CheckGraphFeatures,
+		this);
+
 	Simulator::Run ();
 
 	monitor->CheckForLostPackets();

@@ -2091,7 +2091,7 @@ void RoutingProtocol::SendUserDataAsUnicast(
      * 後からenvironment.csvなどから
      * 読み込む形へ変更できる。
      */
-    const uint32_t totalDataSize = 300000;
+    const uint32_t totalDataSize = 128;
 
     /*
      * 1パケットに入れる最大ペイロードサイズ
