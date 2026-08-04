@@ -129,6 +129,16 @@ public:
                 return m_chunkDataSize;
         }
 
+		void SetSendStartTimeNs(uint64_t sendStartTimeNs)
+		{
+				m_sendStartTimeNs = sendStartTimeNs;
+		}
+
+		uint64_t GetSendStartTimeNs(void) const
+		{
+				return m_sendStartTimeNs;
+		}
+
 private:
         /*
          * 一連の分割送信を識別する番号
@@ -156,6 +166,13 @@ private:
          * このパケットに入っているデータサイズ
          */
         uint32_t m_chunkDataSize;
+
+		        /*
+         * UserData全体の送信開始予定時刻
+         *
+         * 単位はナノ秒
+         */
+        uint64_t m_sendStartTimeNs;
 };
 
 std::ostream &

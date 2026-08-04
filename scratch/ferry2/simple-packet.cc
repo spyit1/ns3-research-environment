@@ -391,7 +391,8 @@ FragmentHeader::FragmentHeader()
           m_totalDataSize(0),
           m_totalChunks(0),
           m_chunkIndex(0),
-          m_chunkDataSize(0)
+          m_chunkDataSize(0),
+          m_sendStartTimeNs(0)
 {
 }
 
@@ -420,7 +421,7 @@ FragmentHeader::GetSerializedSize(void) const
          *
          * 4 byte × 5 = 20 byte
          */
-        return 20;
+        return 28;
 }
 
 void
@@ -433,6 +434,7 @@ FragmentHeader::Serialize(Buffer::Iterator start) const
         i.WriteU32(m_totalChunks);
         i.WriteU32(m_chunkIndex);
         i.WriteU32(m_chunkDataSize);
+        i.WriteU64(m_sendStartTimeNs);
 }
 
 uint32_t
@@ -445,6 +447,7 @@ FragmentHeader::Deserialize(Buffer::Iterator start)
         m_totalChunks = i.ReadU32();
         m_chunkIndex = i.ReadU32();
         m_chunkDataSize = i.ReadU32();
+        m_sendStartTimeNs = i.ReadU64();
 
         uint32_t distance =
                 i.GetDistanceFrom(start);
@@ -464,7 +467,8 @@ FragmentHeader::Print(std::ostream &os) const
                 << ", totalDataSize=" << m_totalDataSize
                 << ", totalChunks=" << m_totalChunks
                 << ", chunkIndex=" << m_chunkIndex
-                << ", chunkDataSize=" << m_chunkDataSize;
+                << ", chunkDataSize=" << m_chunkDataSize
+                << ", sendStartTimeNs=" << m_sendStartTimeNs;
 }
 
 std::ostream &

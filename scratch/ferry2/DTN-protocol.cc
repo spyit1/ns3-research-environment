@@ -2091,7 +2091,7 @@ void RoutingProtocol::SendUserDataAsUnicast(
      * 後からenvironment.csvなどから
      * 読み込む形へ変更できる。
      */
-    const uint32_t totalDataSize = 128;
+    const uint32_t totalDataSize = 300000;
 
     /*
      * 1パケットに入れる最大ペイロードサイズ
@@ -2152,6 +2152,19 @@ void RoutingProtocol::SendUserDataAsUnicast(
             100
         );
 
+	/*
+	* 最初の分割パケットが実際に送信される予定時刻。
+	*
+	* 現在時刻にbaseDelayを加え、
+	* ナノ秒単位で保存する。
+	*/
+	uint64_t sendStartTimeNs =
+		static_cast<uint64_t>(
+			Simulator::Now().GetNanoSeconds()
+		)
+		+ static_cast<uint64_t>(baseDelay)
+			* 1000000ULL;	
+
     /*
      * まだ送信していないデータサイズ。
      */
@@ -2165,6 +2178,7 @@ void RoutingProtocol::SendUserDataAsUnicast(
         << ", transferId=" << transferId
         << ", totalDataSize=" << totalDataSize
         << ", totalChunks=" << numberOfChunks
+		<< ", sendStartTimeNs=" << sendStartTimeNs
         << std::endl;
 
     for (uint32_t chunkIndex = 0;
@@ -2238,6 +2252,10 @@ void RoutingProtocol::SendUserDataAsUnicast(
         fragmentHeader.SetChunkDataSize(
             currentChunkSize
         );
+
+		fragmentHeader.SetSendStartTimeNs(
+			sendStartTimeNs
+		);
 
         packet->AddHeader(
             fragmentHeader
@@ -2701,6 +2719,9 @@ void RoutingProtocol::RecvUserDataAsUnicast(
         uint32_t chunkDataSize =
                 fragmentHeader.GetChunkDataSize();
 
+		uint64_t sendStartTimeNs =
+        fragmentHeader.GetSendStartTimeNs();
+
         /*
          * ヘッダ値の妥当性確認
          */
@@ -2870,6 +2891,42 @@ void RoutingProtocol::RecvUserDataAsUnicast(
                 << " receivedBytes="
                 << buffer.receivedBytes
                 << std::endl;
+
+
+		/*
+		* UserData全体の受信完了時刻
+		*/
+		uint64_t receiveCompleteTimeNs =
+				static_cast<uint64_t>(
+						Simulator::Now().GetNanoSeconds()
+				);
+
+		/*
+		* 最初のチャンクの送信開始から、
+		* 全チャンクの受信完了までにかかった時間
+		*/
+		uint64_t transferTimeNs =
+				receiveCompleteTimeNs
+				- sendStartTimeNs;
+
+		double transferTimeSeconds =
+				static_cast<double>(transferTimeNs)
+				/ 1000000000.0;
+
+		std::cout
+        << "[UserDataTransferTime]"
+        << " sender=" << sender
+        << " receiver=" << receiver
+        << " transferId=" << transferId
+        << " dataSize=" << buffer.totalDataSize
+        << " chunks=" << buffer.totalChunks
+        << " sendStartTimeNs="
+        << sendStartTimeNs
+        << " receiveCompleteTimeNs="
+        << receiveCompleteTimeNs
+        << " transferTimeSeconds="
+        << transferTimeSeconds
+        << std::endl;
 
         /*
          * 受信完了したため管理情報を削除
