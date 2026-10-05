@@ -550,7 +550,7 @@ for i in range(len(user_ids)):
 # K-meansによるクラスタリング
 # ============================================================
 
-NUM_CLUSTERS = 2
+NUM_CLUSTERS = 3
 
 # PyTorch Tensor → NumPy
 embedding_array = (
@@ -583,3 +583,128 @@ for i, user_id in enumerate(user_ids):
         f"userId={user_id} "
         f"cluster={cluster_labels[i]}"
     )
+    
+    
+# ============================================================
+# 時刻別Pair評価
+# ============================================================
+
+print("\n=== Pair Evaluation ===")
+
+EVALUATION_TIMES = [60.0, 90.0]
+
+for eval_time in EVALUATION_TIMES:
+
+    future_time = eval_time + FUTURE_DELTA
+
+    current_positions = positions_by_time[eval_time]
+    future_positions = positions_by_time[future_time]
+
+    eval_user_ids = sorted(
+        current_positions.keys()
+    )
+
+    eval_user_to_index = {
+        user_id: index
+        for index, user_id in enumerate(eval_user_ids)
+    }
+
+    # Node feature
+    eval_node_features = []
+
+    for user_id in eval_user_ids:
+
+        x, y = current_positions[user_id]
+
+        eval_node_features.append(
+            [
+                x / POSITION_SCALE,
+                y / POSITION_SCALE
+            ]
+        )
+
+    eval_x_tensor = torch.tensor(
+        eval_node_features,
+        dtype=torch.float
+    )
+
+    # Edge
+    eval_edge_list = []
+
+    for source, target in edges_by_time[eval_time]:
+
+        if (
+            source in eval_user_to_index
+            and
+            target in eval_user_to_index
+        ):
+
+            eval_edge_list.append(
+                [
+                    eval_user_to_index[source],
+                    eval_user_to_index[target]
+                ]
+            )
+
+    eval_edge_index = torch.tensor(
+        eval_edge_list,
+        dtype=torch.long
+    ).t().contiguous()
+
+    # Embedding
+    with torch.no_grad():
+
+        eval_embeddings = model(
+            eval_x_tensor,
+            eval_edge_index
+        )
+
+    print(
+        f"\nTime {eval_time:.0f} "
+        f"-> {future_time:.0f}"
+    )
+
+    # 今回確認したいGroup Aだけ評価
+    target_pairs = [
+        (0, 1),
+        (0, 2),
+        (1, 2)
+    ]
+
+    for user1, user2 in target_pairs:
+
+        current_distance = calculate_distance(
+            current_positions[user1],
+            current_positions[user2]
+        )
+
+        future_distance = calculate_distance(
+            future_positions[user1],
+            future_positions[user2]
+        )
+
+        i = eval_user_to_index[user1]
+        j = eval_user_to_index[user2]
+
+        embedding_distance = torch.norm(
+            eval_embeddings[i]
+            -
+            eval_embeddings[j]
+        ).item()
+
+        if (
+            current_distance <= DISTANCE_THRESHOLD
+            and
+            future_distance <= DISTANCE_THRESHOLD
+        ):
+            pair_type = "Positive"
+        else:
+            pair_type = "Negative"
+
+        print(
+            f"{user1} -- {user2} "
+            f"{pair_type} "
+            f"current={current_distance:.3f} "
+            f"future={future_distance:.3f} "
+            f"embedding={embedding_distance:.6f}"
+        )

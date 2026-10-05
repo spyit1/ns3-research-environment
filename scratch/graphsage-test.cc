@@ -310,24 +310,44 @@ main(int argc, char* argv[])
     //
     // 3ノードとも右方向へ移動
 
-    for (uint32_t i = 0; i < 3; ++i)
+    // Node 0, 1 はこれまで通り右方向へ移動
+    for (uint32_t i = 0; i < 2; ++i)
     {
         Ptr<WaypointMobilityModel> mob =
             nodes.Get(i)->GetObject<WaypointMobilityModel>();
 
         double y = 100.0 + 20.0 * i;
 
-        // 0秒時点
         mob->AddWaypoint(
             Waypoint(
                 Seconds(0.0),
                 Vector(100.0, y, 0.0)));
 
-        // 200秒時点
         mob->AddWaypoint(
             Waypoint(
                 Seconds(SIMULATION_TIME),
                 Vector(500.0, y, 0.0)));
+    }
+
+    // Node 2 は100秒までは右方向、その後上方向へ移動
+    {
+        Ptr<WaypointMobilityModel> mob =
+            nodes.Get(2)->GetObject<WaypointMobilityModel>();
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(0.0),
+                Vector(100.0, 140.0, 0.0)));
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(100.0),
+                Vector(300.0, 140.0, 0.0)));
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(SIMULATION_TIME),
+                Vector(300.0, 500.0, 0.0)));
     }
 
 
