@@ -5,7 +5,7 @@ simtime=4000000
 mode="ON"
 quickhello="QuickHello_ON"
 eraseinfo="EraseBlock_ON"
-user_num="100"
+user_num="10"
 z=1
 A_d=1000
 #p_mode = 2 #1=simple 2=DTN
