@@ -24,6 +24,9 @@ DISTANCE_THRESHOLD = 100.0
 # 今回のフィールドサイズ
 POSITION_SCALE = 1000.0
 
+# 移動速度の正規化用
+VELOCITY_SCALE = 5.0
+
 EPOCHS = 100
 LEARNING_RATE = 0.01
 
@@ -41,10 +44,10 @@ class GraphSAGE(torch.nn.Module):
 
         super().__init__()
 
-        # x,y の2次元
+        # x,y,vx,vy の4次元
         # ↓
         # 16次元
-        self.conv1 = SAGEConv(2, 16)
+        self.conv1 = SAGEConv(4, 16)
 
         # 16次元
         # ↓
@@ -79,10 +82,11 @@ def calculate_distance(pos1, pos2):
 
 
 # ============================================================
-# 位置ログ読み込み
+# 位置・速度ログ読み込み
 # ============================================================
 
 positions_by_time = {}
+velocities_by_time = {}
 
 with open(TRAINING_LOG_FILE, "r") as f:
 
@@ -92,14 +96,28 @@ with open(TRAINING_LOG_FILE, "r") as f:
 
         time = float(parts[0])
         user_id = int(parts[1])
+
         x = float(parts[2])
         y = float(parts[3])
+
+        vx = float(parts[4])
+        vy = float(parts[5])
 
         if time not in positions_by_time:
             positions_by_time[time] = {}
 
-        positions_by_time[time][user_id] = (x, y)
+        if time not in velocities_by_time:
+            velocities_by_time[time] = {}
 
+        positions_by_time[time][user_id] = (
+            x,
+            y
+        )
+
+        velocities_by_time[time][user_id] = (
+            vx,
+            vy
+        )
 
 # ============================================================
 # Edgeログ読み込み
@@ -221,11 +239,15 @@ for epoch in range(EPOCHS):
 
             x, y = current_positions[user_id]
 
-            # 座標を正規化
+            vx, vy = velocities_by_time[current_time][user_id]
+
+            # 位置と速度をそれぞれ正規化
             node_features.append(
                 [
                     x / POSITION_SCALE,
-                    y / POSITION_SCALE
+                    y / POSITION_SCALE,
+                    vx / VELOCITY_SCALE,
+                    vy / VELOCITY_SCALE
                 ]
             )
 
@@ -459,10 +481,14 @@ for user_id in user_ids:
 
     x, y = test_positions[user_id]
 
+    vx, vy = velocities_by_time[TEST_TIME][user_id]
+
     node_features.append(
         [
             x / POSITION_SCALE,
-            y / POSITION_SCALE
+            y / POSITION_SCALE,
+            vx / VELOCITY_SCALE,
+            vy / VELOCITY_SCALE
         ]
     )
 
@@ -616,10 +642,14 @@ for eval_time in EVALUATION_TIMES:
 
         x, y = current_positions[user_id]
 
+        vx, vy = velocities_by_time[eval_time][user_id]
+
         eval_node_features.append(
             [
                 x / POSITION_SCALE,
-                y / POSITION_SCALE
+                y / POSITION_SCALE,
+                vx / VELOCITY_SCALE,
+                vy / VELOCITY_SCALE
             ]
         )
 
@@ -743,13 +773,17 @@ with open(CLUSTER_LOG_FILE, "w") as cluster_file:
 
             x, y = cluster_positions[user_id]
 
+            vx, vy = velocities_by_time[cluster_time][user_id]
+
             cluster_node_features.append(
                 [
                     x / POSITION_SCALE,
-                    y / POSITION_SCALE
+                    y / POSITION_SCALE,
+                    vx / VELOCITY_SCALE,
+                    vy / VELOCITY_SCALE
                 ]
             )
-
+        
         cluster_x_tensor = torch.tensor(
             cluster_node_features,
             dtype=torch.float

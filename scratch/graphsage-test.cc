@@ -108,11 +108,14 @@ WriteTrainingLog(NodeContainer nodes)
             nodes.Get(i)->GetObject<MobilityModel>();
 
         Vector position = mobility->GetPosition();
+        Vector velocity = mobility->GetVelocity();
 
         fout << now << " "
              << i << " "
              << position.x << " "
-             << position.y
+             << position.y << " "
+             << velocity.x << " "
+             << velocity.y
              << std::endl;
     }
 
