@@ -708,3 +708,125 @@ for eval_time in EVALUATION_TIMES:
             f"future={future_distance:.3f} "
             f"embedding={embedding_distance:.6f}"
         )
+        
+
+# ============================================================
+# 全時刻のクラスタリング結果をファイル出力
+# ============================================================
+
+CLUSTER_LOG_FILE = "graphsage_cluster.log"
+
+print("\n=== Export Cluster Log ===")
+
+with open(CLUSTER_LOG_FILE, "w") as cluster_file:
+
+    for cluster_time in sorted(positions_by_time.keys()):
+
+        cluster_positions = positions_by_time[cluster_time]
+
+        cluster_user_ids = sorted(
+            cluster_positions.keys()
+        )
+
+        cluster_user_to_index = {
+            user_id: index
+            for index, user_id in enumerate(cluster_user_ids)
+        }
+
+        # ====================================================
+        # Node feature
+        # ====================================================
+
+        cluster_node_features = []
+
+        for user_id in cluster_user_ids:
+
+            x, y = cluster_positions[user_id]
+
+            cluster_node_features.append(
+                [
+                    x / POSITION_SCALE,
+                    y / POSITION_SCALE
+                ]
+            )
+
+        cluster_x_tensor = torch.tensor(
+            cluster_node_features,
+            dtype=torch.float
+        )
+
+        # ====================================================
+        # Edge
+        # ====================================================
+
+        cluster_edge_list = []
+
+        for source, target in edges_by_time[cluster_time]:
+
+            if (
+                source in cluster_user_to_index
+                and
+                target in cluster_user_to_index
+            ):
+
+                cluster_edge_list.append(
+                    [
+                        cluster_user_to_index[source],
+                        cluster_user_to_index[target]
+                    ]
+                )
+
+        cluster_edge_index = torch.tensor(
+            cluster_edge_list,
+            dtype=torch.long
+        ).t().contiguous()
+
+        # ====================================================
+        # 学習済みGraphSAGE
+        # ====================================================
+
+        with torch.no_grad():
+
+            cluster_embeddings = model(
+                cluster_x_tensor,
+                cluster_edge_index
+            )
+
+        # ====================================================
+        # K-means
+        # ====================================================
+
+        cluster_embedding_array = (
+            cluster_embeddings
+            .detach()
+            .cpu()
+            .numpy()
+        )
+
+        cluster_kmeans = KMeans(
+            n_clusters=NUM_CLUSTERS,
+            random_state=0,
+            n_init=10
+        )
+
+        cluster_labels = cluster_kmeans.fit_predict(
+            cluster_embedding_array
+        )
+
+        # ====================================================
+        # ファイル出力
+        # time userId clusterId
+        # ====================================================
+
+        for i, user_id in enumerate(cluster_user_ids):
+
+            cluster_file.write(
+                f"{cluster_time:.0f} "
+                f"{user_id} "
+                f"{cluster_labels[i]}\n"
+            )
+
+
+print(
+    f"Saved: {CLUSTER_LOG_FILE}"
+)
