@@ -258,6 +258,20 @@ main(int argc, char* argv[])
             << std::endl;
     }
 
+
+    // GraphSAGE学習用ログを初期化
+    {
+        std::ofstream fout(TRAINING_LOG_FILE);
+
+        if (!fout)
+        {
+            std::cerr << "Failed to create training log file."
+                    << std::endl;
+            return 1;
+        }
+    }
+
+
     // GraphSAGE Edgeログを初期化
     {
         std::ofstream fout(EDGE_LOG_FILE);
