@@ -39,7 +39,7 @@ with open(FEATURE_FILE, "r") as f:
 
         parts = line.split()
 
-        if len(parts) != 4:
+        if len(parts) != 8:
             continue
 
         time = float(parts[0])

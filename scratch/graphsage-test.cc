@@ -110,13 +110,52 @@ WriteTrainingLog(NodeContainer nodes)
         Vector position = mobility->GetPosition();
         Vector velocity = mobility->GetVelocity();
 
+        // ----------------------------------------------------
+        // 各ノードの目的地
+        // ----------------------------------------------------
+        double destinationX = 0.0;
+        double destinationY = 0.0;
+
+        if (i == 0)
+        {
+            destinationX = 500.0;
+            destinationY = 100.0;
+        }
+        else if (i == 1)
+        {
+            destinationX = 500.0;
+            destinationY = 120.0;
+        }
+        else if (i == 2)
+        {
+            destinationX = 300.0;
+            destinationY = 500.0;
+        }
+        else if (i == 3)
+        {
+            destinationX = 700.0;
+            destinationY = 900.0;
+        }
+        else if (i == 4)
+        {
+            destinationX = 720.0;
+            destinationY = 900.0;
+        }
+        else if (i == 5)
+        {
+            destinationX = 740.0;
+            destinationY = 900.0;
+        }
+
         fout << now << " "
-             << i << " "
-             << position.x << " "
-             << position.y << " "
-             << velocity.x << " "
-             << velocity.y
-             << std::endl;
+            << i << " "
+            << position.x << " "
+            << position.y << " "
+            << velocity.x << " "
+            << velocity.y << " "
+            << destinationX << " "
+            << destinationY
+            << std::endl;
     }
 
     fout.close();

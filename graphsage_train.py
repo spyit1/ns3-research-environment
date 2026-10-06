@@ -47,7 +47,7 @@ class GraphSAGE(torch.nn.Module):
         # x,y,vx,vy の4次元
         # ↓
         # 16次元
-        self.conv1 = SAGEConv(4, 16)
+        self.conv1 = SAGEConv(6, 16)
 
         # 16次元
         # ↓
@@ -87,6 +87,7 @@ def calculate_distance(pos1, pos2):
 
 positions_by_time = {}
 velocities_by_time = {}
+destinations_by_time = {}
 
 with open(TRAINING_LOG_FILE, "r") as f:
 
@@ -102,12 +103,18 @@ with open(TRAINING_LOG_FILE, "r") as f:
 
         vx = float(parts[4])
         vy = float(parts[5])
+        
+        destination_x = float(parts[6])
+        destination_y = float(parts[7])
 
         if time not in positions_by_time:
             positions_by_time[time] = {}
 
         if time not in velocities_by_time:
             velocities_by_time[time] = {}
+            
+        if time not in destinations_by_time:
+            destinations_by_time[time] = {}
 
         positions_by_time[time][user_id] = (
             x,
@@ -117,6 +124,11 @@ with open(TRAINING_LOG_FILE, "r") as f:
         velocities_by_time[time][user_id] = (
             vx,
             vy
+        )
+        
+        destinations_by_time[time][user_id] = (
+            destination_x,
+            destination_y
         )
 
 # ============================================================
@@ -240,6 +252,10 @@ for epoch in range(EPOCHS):
             x, y = current_positions[user_id]
 
             vx, vy = velocities_by_time[current_time][user_id]
+            
+            destination_x, destination_y = (
+                destinations_by_time[current_time][user_id]
+            )
 
             # 位置と速度をそれぞれ正規化
             node_features.append(
@@ -247,7 +263,9 @@ for epoch in range(EPOCHS):
                     x / POSITION_SCALE,
                     y / POSITION_SCALE,
                     vx / VELOCITY_SCALE,
-                    vy / VELOCITY_SCALE
+                    vy / VELOCITY_SCALE,
+                    destination_x / POSITION_SCALE,
+                    destination_y / POSITION_SCALE
                 ]
             )
 
@@ -482,13 +500,19 @@ for user_id in user_ids:
     x, y = test_positions[user_id]
 
     vx, vy = velocities_by_time[TEST_TIME][user_id]
+    
+    destination_x, destination_y = (
+        destinations_by_time[TEST_TIME][user_id]
+    )
 
     node_features.append(
         [
             x / POSITION_SCALE,
             y / POSITION_SCALE,
             vx / VELOCITY_SCALE,
-            vy / VELOCITY_SCALE
+            vy / VELOCITY_SCALE,
+            destination_x / POSITION_SCALE,
+            destination_y / POSITION_SCALE
         ]
     )
 
@@ -643,13 +667,19 @@ for eval_time in EVALUATION_TIMES:
         x, y = current_positions[user_id]
 
         vx, vy = velocities_by_time[eval_time][user_id]
+        
+        destination_x, destination_y = (
+            destinations_by_time[eval_time][user_id]
+        )
 
         eval_node_features.append(
             [
                 x / POSITION_SCALE,
                 y / POSITION_SCALE,
                 vx / VELOCITY_SCALE,
-                vy / VELOCITY_SCALE
+                vy / VELOCITY_SCALE,
+                destination_x / POSITION_SCALE,
+                destination_y / POSITION_SCALE
             ]
         )
 
@@ -774,13 +804,19 @@ with open(CLUSTER_LOG_FILE, "w") as cluster_file:
             x, y = cluster_positions[user_id]
 
             vx, vy = velocities_by_time[cluster_time][user_id]
+            
+            destination_x, destination_y = (
+                destinations_by_time[cluster_time][user_id]
+            )
 
             cluster_node_features.append(
                 [
                     x / POSITION_SCALE,
                     y / POSITION_SCALE,
                     vx / VELOCITY_SCALE,
-                    vy / VELOCITY_SCALE
+                    vy / VELOCITY_SCALE,
+                    destination_x / POSITION_SCALE,
+                    destination_y / POSITION_SCALE
                 ]
             )
         
