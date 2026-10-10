@@ -634,14 +634,331 @@ for i, user_id in enumerate(user_ids):
         f"cluster={cluster_labels[i]}"
     )
     
+
+# ============================================================
+# Positive / Negative のEmbedding距離を全体評価
+# ============================================================
+
+print("\n=== Embedding Separation Evaluation ===")
+
+positive_distances = []
+negative_distances = []
+
+worst_positive = None
+closest_negative = None
+
+for eval_time in training_times:
+
+    future_time = eval_time + FUTURE_DELTA
+
+    current_positions = positions_by_time[eval_time]
+    future_positions = positions_by_time[future_time]
+
+    eval_user_ids = sorted(
+        current_positions.keys()
+    )
+
+    eval_user_to_index = {
+        user_id: index
+        for index, user_id in enumerate(eval_user_ids)
+    }
+
+    # --------------------------------------------------------
+    # Node feature
+    # --------------------------------------------------------
+
+    eval_node_features = []
+
+    for user_id in eval_user_ids:
+
+        x, y = current_positions[user_id]
+
+        vx, vy = velocities_by_time[eval_time][user_id]
+
+        destination_x, destination_y = (
+            destinations_by_time[eval_time][user_id]
+        )
+
+        eval_node_features.append(
+            [
+                x / POSITION_SCALE,
+                y / POSITION_SCALE,
+                vx / VELOCITY_SCALE,
+                vy / VELOCITY_SCALE,
+                destination_x / POSITION_SCALE,
+                destination_y / POSITION_SCALE
+            ]
+        )
+
+    eval_x_tensor = torch.tensor(
+        eval_node_features,
+        dtype=torch.float
+    )
+
+    # --------------------------------------------------------
+    # Edge
+    # --------------------------------------------------------
+
+    eval_edge_list = []
+
+    for source, target in edges_by_time[eval_time]:
+
+        if (
+            source in eval_user_to_index
+            and
+            target in eval_user_to_index
+        ):
+
+            eval_edge_list.append(
+                [
+                    eval_user_to_index[source],
+                    eval_user_to_index[target]
+                ]
+            )
+
+    eval_edge_index = torch.tensor(
+        eval_edge_list,
+        dtype=torch.long
+    ).t().contiguous()
+
+    # --------------------------------------------------------
+    # Embedding
+    # --------------------------------------------------------
+
+    with torch.no_grad():
+
+        eval_embeddings = model(
+            eval_x_tensor,
+            eval_edge_index
+        )
+
+    # --------------------------------------------------------
+    # 全ペア評価
+    # --------------------------------------------------------
+
+    for i in range(len(eval_user_ids)):
+
+        for j in range(
+            i + 1,
+            len(eval_user_ids)
+        ):
+
+            user1 = eval_user_ids[i]
+            user2 = eval_user_ids[j]
+
+            current_distance = calculate_distance(
+                current_positions[user1],
+                current_positions[user2]
+            )
+
+            future_distance = calculate_distance(
+                future_positions[user1],
+                future_positions[user2]
+            )
+
+            embedding_distance = torch.norm(
+                eval_embeddings[i]
+                -
+                eval_embeddings[j]
+            ).item()
+
+            if (
+                current_distance <= DISTANCE_THRESHOLD
+                and
+                future_distance <= DISTANCE_THRESHOLD
+            ):
+
+                positive_distances.append(
+                    embedding_distance
+                )
+                
+                if (
+                    worst_positive is None
+                    or
+                    embedding_distance
+                    > worst_positive["embedding_distance"]
+                ):
+                    worst_positive = {
+                        "time": eval_time,
+                        "future_time": future_time,
+                        "user1": user1,
+                        "user2": user2,
+                        "current_distance": current_distance,
+                        "future_distance": future_distance,
+                        "embedding_distance": embedding_distance
+                    }
+
+            else:
+
+                negative_distances.append(
+                    embedding_distance
+                )
+                
+                if (
+                    closest_negative is None
+                    or
+                    embedding_distance
+                    < closest_negative["embedding_distance"]
+                ):
+                    closest_negative = {
+                        "time": eval_time,
+                        "future_time": future_time,
+                        "user1": user1,
+                        "user2": user2,
+                        "current_distance": current_distance,
+                        "future_distance": future_distance,
+                        "embedding_distance": embedding_distance
+                    }
+
+
+# ============================================================
+# 集計結果
+# ============================================================
+
+print("\nPositive pairs")
+
+print(
+    f"Count = {len(positive_distances)}"
+)
+
+print(
+    f"Mean  = "
+    f"{sum(positive_distances) / len(positive_distances):.6f}"
+)
+
+print(
+    f"Min   = {min(positive_distances):.6f}"
+)
+
+print(
+    f"Max   = {max(positive_distances):.6f}"
+)
+
+
+print("\nNegative pairs")
+
+print(
+    f"Count = {len(negative_distances)}"
+)
+
+print(
+    f"Mean  = "
+    f"{sum(negative_distances) / len(negative_distances):.6f}"
+)
+
+print(
+    f"Min   = {min(negative_distances):.6f}"
+)
+
+print(
+    f"Max   = {max(negative_distances):.6f}"
+)
+
+
+# ============================================================
+# Positive / Negative の重なり確認
+# ============================================================
+
+positive_max = max(positive_distances)
+negative_min = min(negative_distances)
+
+print("\n=== Separation Check ===")
+
+print(
+    f"Positive Max = {positive_max:.6f}"
+)
+
+print(
+    f"Negative Min = {negative_min:.6f}"
+)
+
+if positive_max < negative_min:
+
+    print(
+        "Result: Separated"
+    )
+
+else:
+
+    print(
+        "Result: Overlap"
+    )
     
+    
+# ============================================================
+# 最も判別が難しかったペア
+# ============================================================
+
+print("\n=== Worst Positive Pair ===")
+
+print(
+    f"Time = "
+    f"{worst_positive['time']:.0f} "
+    f"-> "
+    f"{worst_positive['future_time']:.0f}"
+)
+
+print(
+    f"Pair = "
+    f"{worst_positive['user1']} "
+    f"-- "
+    f"{worst_positive['user2']}"
+)
+
+print(
+    f"Current Distance = "
+    f"{worst_positive['current_distance']:.3f}"
+)
+
+print(
+    f"Future Distance = "
+    f"{worst_positive['future_distance']:.3f}"
+)
+
+print(
+    f"Embedding Distance = "
+    f"{worst_positive['embedding_distance']:.6f}"
+)
+
+
+print("\n=== Closest Negative Pair ===")
+
+print(
+    f"Time = "
+    f"{closest_negative['time']:.0f} "
+    f"-> "
+    f"{closest_negative['future_time']:.0f}"
+)
+
+print(
+    f"Pair = "
+    f"{closest_negative['user1']} "
+    f"-- "
+    f"{closest_negative['user2']}"
+)
+
+print(
+    f"Current Distance = "
+    f"{closest_negative['current_distance']:.3f}"
+)
+
+print(
+    f"Future Distance = "
+    f"{closest_negative['future_distance']:.3f}"
+)
+
+print(
+    f"Embedding Distance = "
+    f"{closest_negative['embedding_distance']:.6f}"
+)
+
 # ============================================================
 # 時刻別Pair評価
 # ============================================================
 
 print("\n=== Pair Evaluation ===")
 
-EVALUATION_TIMES = [60.0, 90.0]
+EVALUATION_TIMES = [60.0, 90.0, 120.0, 140.0]
 
 for eval_time in EVALUATION_TIMES:
 
@@ -728,7 +1045,14 @@ for eval_time in EVALUATION_TIMES:
     target_pairs = [
         (0, 1),
         (0, 2),
-        (1, 2)
+        (0, 6),
+        (0, 7),
+        (1, 2),
+        (1, 6),
+        (1, 7),
+        (2, 6),
+        (2, 7),
+        (6, 7)
     ]
 
     for user1, user2 in target_pairs:

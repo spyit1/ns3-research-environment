@@ -13,7 +13,7 @@ using namespace ns3;
 // ============================================================
 
 // ノード数
-const uint32_t NUM_NODES = 6;
+const uint32_t NUM_NODES = 8;
 
 // シミュレーション時間 [秒]
 const double SIMULATION_TIME = 200.0;
@@ -146,6 +146,17 @@ WriteTrainingLog(NodeContainer nodes)
             destinationX = 740.0;
             destinationY = 900.0;
         }
+        else if (i == 6)
+        {
+            destinationX = 500.0;
+            destinationY = 160.0;
+        }
+        else if (i == 7)
+        {
+            destinationX = 400.0;
+            destinationY = 500.0;
+        }
+
 
         fout << now << " "
             << i << " "
@@ -390,6 +401,43 @@ main(int argc, char* argv[])
             Waypoint(
                 Seconds(SIMULATION_TIME),
                 Vector(300.0, 500.0, 0.0)));
+    }
+
+    // Node 6 は Node 0, 1 と同じ右方向へ移動
+    {
+        Ptr<WaypointMobilityModel> mob =
+            nodes.Get(6)->GetObject<WaypointMobilityModel>();
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(0.0),
+                Vector(100.0, 160.0, 0.0)));
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(SIMULATION_TIME),
+                Vector(500.0, 160.0, 0.0)));
+    }
+
+    // Node 7 は150秒までは右方向、その後上方向へ移動
+    {
+        Ptr<WaypointMobilityModel> mob =
+            nodes.Get(7)->GetObject<WaypointMobilityModel>();
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(0.0),
+                Vector(100.0, 180.0, 0.0)));
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(150.0),
+                Vector(400.0, 180.0, 0.0)));
+
+        mob->AddWaypoint(
+            Waypoint(
+                Seconds(SIMULATION_TIME),
+                Vector(400.0, 500.0, 0.0)));
     }
 
 
