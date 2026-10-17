@@ -13,7 +13,7 @@ using namespace ns3;
 // ============================================================
 
 // ノード数
-const uint32_t NUM_NODES = 8;
+const uint32_t NUM_NODES = 100;
 
 // シミュレーション時間 [秒]
 const double SIMULATION_TIME = 200.0;
@@ -22,22 +22,21 @@ const double SIMULATION_TIME = 200.0;
 const double OUTPUT_INTERVAL = 10.0;
 
 const std::string CLUSTER_VIEW_FILE =
-    "graphsage_test_view.txt";
-
+    "graphsage_rw_view.txt";
 
 // GraphSAGE学習用特徴量の取得間隔 [秒]
 const double FEATURE_INTERVAL = 5.0;
 
 // GraphSAGE学習用ログ
 const std::string TRAINING_LOG_FILE =
-    "graphsage_training.log";
+    "graphsage_rw_training.log";
 
 // 1ホップの近隣判定距離 [m]
 const double NEIGHBOR_DISTANCE = 100.0;
 
 // GraphSAGE用Edgeログ
 const std::string EDGE_LOG_FILE =
-    "graphsage_edge.log";
+    "graphsage_rw_edge.log";
 
 
 
@@ -110,63 +109,13 @@ WriteTrainingLog(NodeContainer nodes)
         Vector position = mobility->GetPosition();
         Vector velocity = mobility->GetVelocity();
 
-        // ----------------------------------------------------
-        // 各ノードの目的地
-        // ----------------------------------------------------
-        double destinationX = 0.0;
-        double destinationY = 0.0;
-
-        if (i == 0)
-        {
-            destinationX = 500.0;
-            destinationY = 100.0;
-        }
-        else if (i == 1)
-        {
-            destinationX = 500.0;
-            destinationY = 120.0;
-        }
-        else if (i == 2)
-        {
-            destinationX = 300.0;
-            destinationY = 500.0;
-        }
-        else if (i == 3)
-        {
-            destinationX = 700.0;
-            destinationY = 900.0;
-        }
-        else if (i == 4)
-        {
-            destinationX = 720.0;
-            destinationY = 900.0;
-        }
-        else if (i == 5)
-        {
-            destinationX = 740.0;
-            destinationY = 900.0;
-        }
-        else if (i == 6)
-        {
-            destinationX = 500.0;
-            destinationY = 160.0;
-        }
-        else if (i == 7)
-        {
-            destinationX = 400.0;
-            destinationY = 500.0;
-        }
-
-
         fout << now << " "
-            << i << " "
-            << position.x << " "
-            << position.y << " "
-            << velocity.x << " "
-            << velocity.y << " "
-            << destinationX << " "
-            << destinationY
-            << std::endl;
+        << i << " "
+        << position.x << " "
+        << position.y << " "
+        << velocity.x << " "
+        << velocity.y
+        << std::endl;
     }
 
     fout.close();
@@ -337,8 +286,38 @@ main(int argc, char* argv[])
         }
     }
 
+    // --------------------------------------------------------
+    // 2. RandomWaypointMobilityModelを設定
+    // --------------------------------------------------------
 
-    
+    MobilityHelper mobility;
+
+    // 初期位置をランダムに設定
+    mobility.SetPositionAllocator(
+        "ns3::RandomRectanglePositionAllocator",
+        "X", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1000.0]"),
+        "Y", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1000.0]"));
+
+    // 移動先をランダムに選択するためのPositionAllocator
+    Ptr<RandomRectanglePositionAllocator> destinationAllocator =
+        CreateObject<RandomRectanglePositionAllocator>();
+
+    destinationAllocator->SetAttribute(
+        "X",
+        StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1000.0]"));
+
+    destinationAllocator->SetAttribute(
+        "Y",
+        StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1000.0]"));
+
+    // RandomWaypointMobilityModelを設定
+    mobility.SetMobilityModel(
+        "ns3::RandomWaypointMobilityModel",
+        "Speed", StringValue("ns3::ConstantRandomVariable[Constant=2.0]"),
+        "Pause", StringValue("ns3::ConstantRandomVariable[Constant=0.0]"),
+        "PositionAllocator", PointerValue(destinationAllocator));
+
+    mobility.Install(nodes);
 
     // --------------------------------------------------------
     // 4. 位置表示を開始
