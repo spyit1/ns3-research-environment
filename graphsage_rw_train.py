@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 import torch
 import torch.nn.functional as F
@@ -183,6 +184,34 @@ print(
     len(training_times)
 )
 
+# ============================================================
+# GraphSAGE 重み記録
+# ============================================================
+
+WEIGHT_LOG_FILE = "graphsage_weight_history.log"
+
+def save_model_weights(epoch):
+
+    with open(WEIGHT_LOG_FILE, "a") as f:
+
+        f.write(f"\n===== Epoch {epoch} =====\n")
+
+        for name, param in model.named_parameters():
+
+            f.write(f"\n{name}\n")
+
+            values = param.detach().cpu().numpy()
+
+            f.write(
+                np.array2string(
+                    values,
+                    precision=6,
+                    threshold=np.inf
+                )
+            )
+
+            f.write("\n")
+
 
 # ============================================================
 # GraphSAGE
@@ -195,6 +224,13 @@ optimizer = torch.optim.Adam(
     lr=LEARNING_RATE
 )
 
+# ============================================================
+# 学習前の重みを保存（Epoch 0）
+# ============================================================
+
+open(WEIGHT_LOG_FILE, "w").close()
+
+save_model_weights(0)
 
 # ============================================================
 # 学習
@@ -411,6 +447,14 @@ for epoch in range(EPOCHS):
     total_loss.backward()
 
     optimizer.step()
+    
+    # ============================================================
+    # 指定Epochの重みを保存
+    # ============================================================
+
+    if (epoch + 1) in [1, 10, 30, 50, 100]:
+
+        save_model_weights(epoch + 1)
 
 
     # ========================================================
@@ -569,7 +613,7 @@ for i in range(len(user_ids)):
 # K-meansによるクラスタリング
 # ============================================================
 
-NUM_CLUSTERS = 3
+NUM_CLUSTERS = 5
 
 # PyTorch Tensor → NumPy
 embedding_array = (
