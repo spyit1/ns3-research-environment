@@ -33,3 +33,6 @@ core.*
 *~
 *.swp
 *.swo
+
+# Python virtual environment
+graphsage-venv/

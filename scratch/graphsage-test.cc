@@ -5,6 +5,9 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <string>
+#include <vector>
+#include <algorithm>
 
 using namespace ns3;
 
@@ -13,7 +16,7 @@ using namespace ns3;
 // ============================================================
 
 // ノード数
-const uint32_t NUM_NODES = 8;
+const uint32_t NUM_NODES = 50;
 
 // シミュレーション時間 [秒]
 const double SIMULATION_TIME = 200.0;
@@ -38,6 +41,13 @@ const double NEIGHBOR_DISTANCE = 100.0;
 // GraphSAGE用Edgeログ
 const std::string EDGE_LOG_FILE =
     "graphsage_edge.log";
+
+
+// ============================================================
+// 各ノードの目的地
+// ============================================================
+
+std::vector<Vector> nodeDestinations;    
 
 
 
@@ -113,49 +123,8 @@ WriteTrainingLog(NodeContainer nodes)
         // ----------------------------------------------------
         // 各ノードの目的地
         // ----------------------------------------------------
-        double destinationX = 0.0;
-        double destinationY = 0.0;
-
-        if (i == 0)
-        {
-            destinationX = 500.0;
-            destinationY = 100.0;
-        }
-        else if (i == 1)
-        {
-            destinationX = 500.0;
-            destinationY = 120.0;
-        }
-        else if (i == 2)
-        {
-            destinationX = 300.0;
-            destinationY = 500.0;
-        }
-        else if (i == 3)
-        {
-            destinationX = 700.0;
-            destinationY = 900.0;
-        }
-        else if (i == 4)
-        {
-            destinationX = 720.0;
-            destinationY = 900.0;
-        }
-        else if (i == 5)
-        {
-            destinationX = 740.0;
-            destinationY = 900.0;
-        }
-        else if (i == 6)
-        {
-            destinationX = 500.0;
-            destinationY = 160.0;
-        }
-        else if (i == 7)
-        {
-            destinationX = 400.0;
-            destinationY = 500.0;
-        }
+        double destinationX = nodeDestinations[i].x;
+        double destinationY = nodeDestinations[i].y;
 
 
         fout << now << " "
@@ -288,8 +257,28 @@ PrintPositions(NodeContainer nodes)
 int
 main(int argc, char* argv[])
 {
+    uint32_t seed = 1;
+    uint64_t run = 1;
+
+    CommandLine cmd;
+
+    cmd.AddValue(
+        "seed",
+        "Random seed",
+        seed);
+
+    cmd.AddValue(
+        "run",
+        "Random run number",
+        run);
+
+    cmd.Parse(argc, argv);
+
+    RngSeedManager::SetSeed(seed);
+    RngSeedManager::SetRun(run);
+
     // --------------------------------------------------------
-    // 1. ノードを6個作成
+    // 1. ノードを8個作成
     // --------------------------------------------------------
     NodeContainer nodes;
     nodes.Create(NUM_NODES);
@@ -352,121 +341,116 @@ main(int argc, char* argv[])
 
 
     // --------------------------------------------------------
-    // 3. 各ノードにWaypointを設定
+    // 3. 各ノードにランダムWaypointを設定
     // --------------------------------------------------------
 
-    // Group A
-    //
-    // Node 0 : (100,100) → (500,100)
-    // Node 1 : (100,120) → (500,120)
-    // Node 2 : (100,140) → (500,140)
-    //
-    // 3ノードとも右方向へ移動
+    // ============================================================
+    // 50ノードの初期位置をランダムに設定
+    // ============================================================
 
-    // Node 0, 1 はこれまで通り右方向へ移動
-    for (uint32_t i = 0; i < 2; ++i)
+    std::vector<Vector> initialPositions(NUM_NODES);
+
+    // 初期位置用乱数生成器
+    Ptr<UniformRandomVariable> randomInitialPosition =
+        CreateObject<UniformRandomVariable>();
+
+    randomInitialPosition->SetAttribute(
+        "Min",
+        DoubleValue(100.0));
+
+    randomInitialPosition->SetAttribute(
+        "Max",
+        DoubleValue(900.0));
+
+    // 全ノードの初期位置を生成
+    for (uint32_t i = 0; i < NUM_NODES; ++i)
+    {
+        double startX = randomInitialPosition->GetValue();
+        double startY = randomInitialPosition->GetValue();
+
+        initialPositions[i] = Vector(
+            startX,
+            startY,
+            0.0
+        );
+    }
+
+    // 目的地を保存する領域
+    nodeDestinations.resize(NUM_NODES);
+
+    // 乱数生成器
+    Ptr<UniformRandomVariable> randomPosition =
+        CreateObject<UniformRandomVariable>();
+
+    Ptr<UniformRandomVariable> randomSpeed =
+        CreateObject<UniformRandomVariable>();
+
+    randomPosition->SetAttribute(
+        "Min",
+        DoubleValue(100.0));
+
+    randomPosition->SetAttribute(
+        "Max",
+        DoubleValue(900.0));
+
+    randomSpeed->SetAttribute(
+        "Min",
+        DoubleValue(1.0));
+
+    randomSpeed->SetAttribute(
+        "Max",
+        DoubleValue(5.0));
+
+    // 各ノードのWaypointを設定
+    for (uint32_t i = 0; i < NUM_NODES; ++i)
     {
         Ptr<WaypointMobilityModel> mob =
             nodes.Get(i)->GetObject<WaypointMobilityModel>();
 
-        double y = 100.0 + 20.0 * i;
+        Vector start = initialPositions[i];
 
+        // ランダムな目的地
+        double destX = randomPosition->GetValue();
+        double destY = randomPosition->GetValue();
+
+        Vector destination(destX, destY, 0.0);
+
+        nodeDestinations[i] = destination;
+
+        // ランダムな移動速度
+        double speed = randomSpeed->GetValue();
+
+        // 移動距離
+        double dx = destination.x - start.x;
+        double dy = destination.y - start.y;
+
+        double distance =
+            std::sqrt(dx * dx + dy * dy);
+
+        // 目的地までの移動時間
+        double travelTime = distance / speed;
+
+        // 初期位置
         mob->AddWaypoint(
             Waypoint(
                 Seconds(0.0),
-                Vector(100.0, y, 0.0)));
+                start));
 
+        // 目的地
         mob->AddWaypoint(
             Waypoint(
-                Seconds(SIMULATION_TIME),
-                Vector(500.0, y, 0.0)));
-    }
+                Seconds(travelTime),
+                destination));
 
-    // Node 2 は100秒までは右方向、その後上方向へ移動
-    {
-        Ptr<WaypointMobilityModel> mob =
-            nodes.Get(2)->GetObject<WaypointMobilityModel>();
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(0.0),
-                Vector(100.0, 140.0, 0.0)));
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(100.0),
-                Vector(300.0, 140.0, 0.0)));
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(SIMULATION_TIME),
-                Vector(300.0, 500.0, 0.0)));
-    }
-
-    // Node 6 は Node 0, 1 と同じ右方向へ移動
-    {
-        Ptr<WaypointMobilityModel> mob =
-            nodes.Get(6)->GetObject<WaypointMobilityModel>();
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(0.0),
-                Vector(100.0, 160.0, 0.0)));
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(SIMULATION_TIME),
-                Vector(500.0, 160.0, 0.0)));
-    }
-
-    // Node 7 は150秒までは右方向、その後上方向へ移動
-    {
-        Ptr<WaypointMobilityModel> mob =
-            nodes.Get(7)->GetObject<WaypointMobilityModel>();
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(0.0),
-                Vector(100.0, 180.0, 0.0)));
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(150.0),
-                Vector(400.0, 180.0, 0.0)));
-
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(SIMULATION_TIME),
-                Vector(400.0, 500.0, 0.0)));
-    }
-
-
-    // Group B
-    //
-    // Node 3 : (700,500) → (700,900)
-    // Node 4 : (720,500) → (720,900)
-    // Node 5 : (740,500) → (740,900)
-    //
-    // 3ノードとも上方向へ移動
-
-    for (uint32_t i = 3; i < 6; ++i)
-    {
-        Ptr<WaypointMobilityModel> mob =
-            nodes.Get(i)->GetObject<WaypointMobilityModel>();
-
-        double x = 700.0 + 20.0 * (i - 3);
-
-        // 0秒時点
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(0.0),
-                Vector(x, 500.0, 0.0)));
-
-        // 200秒時点
-        mob->AddWaypoint(
-            Waypoint(
-                Seconds(SIMULATION_TIME),
-                Vector(x, 900.0, 0.0)));
+        std::cout
+            << "Node " << i
+            << " Start=(" << start.x << "," << start.y << ")"
+            << " Destination=(" << destX << "," << destY << ")"
+            << " Speed=" << speed
+            << " m/s"
+            << " ArrivalTime=" << travelTime
+            << " s"
+            << std::endl;
     }
 
 

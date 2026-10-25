@@ -15,10 +15,10 @@ EDGE_FILE = "graphsage_edge.log"
 OUTPUT_FILE = "graphsage_cluster_movement.gif"
 
 X_MIN = 0
-X_MAX = 800
+X_MAX = 1000
 
 Y_MIN = 0
-Y_MAX = 950
+Y_MAX = 1000
 
 
 # ============================================================
@@ -123,11 +123,14 @@ print("End time:", times[-1])
 # 色設定
 # ============================================================
 
-CLUSTER_COLORS = {
-    0: "tab:blue",
-    1: "tab:orange",
-    2: "tab:green"
-}
+cmap = plt.get_cmap("tab20")
+
+def get_cluster_color(cluster_id):
+
+    if cluster_id < 0:
+        return "gray"
+
+    return cmap(cluster_id % 20)
 
 
 # ============================================================
@@ -208,10 +211,7 @@ def update(frame):
             -1
         )
 
-        color = CLUSTER_COLORS.get(
-            cluster_id,
-            "gray"
-        )
+        color = get_cluster_color(cluster_id)
 
         colors.append(color)
         

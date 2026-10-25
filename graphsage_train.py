@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import os
 
 import torch
 import torch.nn.functional as F
@@ -30,6 +31,16 @@ VELOCITY_SCALE = 5.0
 
 EPOCHS = 100
 LEARNING_RATE = 0.01
+
+# ============================================================
+# モデル保存設定
+# ============================================================
+
+MODEL_FILE = "graphsage_50nodes_model_pretrained.pth"
+
+# True : 保存済みモデルから継続学習
+# False: 新しいモデルから学習
+RESUME_TRAINING = True
 
 # 再現性確認用
 torch.manual_seed(0)
@@ -165,18 +176,38 @@ with open(EDGE_LOG_FILE, "r") as f:
 # 学習に使用できる時刻を取得
 # ============================================================
 
+# ============================================================
+# 学習に使用できる時刻を取得
+# ============================================================
+
 training_times = []
 
 for current_time in sorted(positions_by_time.keys()):
 
     future_time = current_time + FUTURE_DELTA
 
-    if (
-        future_time in positions_by_time
-        and
-        current_time in edges_by_time
-    ):
+    if future_time in positions_by_time:
+
         training_times.append(current_time)
+
+
+print(
+    "Training time count:",
+    len(training_times)
+)
+
+if len(training_times) == 0:
+
+    raise RuntimeError(
+        "No valid training times found."
+    )
+
+# 学習できる時刻がない場合
+if len(training_times) == 0:
+
+    raise RuntimeError(
+        "No valid training times found."
+    )
 
 
 print(
@@ -217,6 +248,10 @@ def save_model_weights(epoch):
 # GraphSAGE
 # ============================================================
 
+# ============================================================
+# GraphSAGEモデル作成
+# ============================================================
+
 model = GraphSAGE()
 
 optimizer = torch.optim.Adam(
@@ -224,13 +259,56 @@ optimizer = torch.optim.Adam(
     lr=LEARNING_RATE
 )
 
+# 累計Epoch数
+completed_epochs = 0
+
+# ============================================================
+# 保存済みモデルの読み込み
+# ============================================================
+
+if RESUME_TRAINING and os.path.exists(MODEL_FILE):
+
+    checkpoint = torch.load(
+        MODEL_FILE,
+        map_location="cpu",
+        weights_only=True
+    )
+
+    model.load_state_dict(
+        checkpoint["model_state_dict"]
+    )
+
+    optimizer.load_state_dict(
+        checkpoint["optimizer_state_dict"]
+    )
+
+    completed_epochs = checkpoint["completed_epochs"]
+
+    print(
+        f"Loaded model: {MODEL_FILE}"
+    )
+
+    print(
+        f"Completed epochs: {completed_epochs}"
+    )
+
+else:
+
+    print("Creating a new GraphSAGE model.")
+
 # ============================================================
 # 学習前の重みを記録
 # ============================================================
 
-open(WEIGHT_LOG_FILE, "w").close()
+# ============================================================
+# 学習前の重みを記録
+# ============================================================
 
-save_model_weights(0)
+if completed_epochs == 0:
+
+    open(WEIGHT_LOG_FILE, "w").close()
+
+save_model_weights(completed_epochs)
 
 # ============================================================
 # 学習
@@ -316,9 +394,13 @@ for epoch in range(EPOCHS):
         # edge_index
         # ====================================================
 
+        # ====================================================
+        # edge_index
+        # ====================================================
+
         edge_list = []
 
-        for source, target in edges_by_time[current_time]:
+        for source, target in edges_by_time.get(current_time, []):
 
             if (
                 source in user_to_index
@@ -333,11 +415,20 @@ for epoch in range(EPOCHS):
                     ]
                 )
 
+        # エッジがない場合も [2, 0] のTensorを生成
+        if edge_list:
 
-        edge_index = torch.tensor(
-            edge_list,
-            dtype=torch.long
-        ).t().contiguous()
+            edge_index = torch.tensor(
+                edge_list,
+                dtype=torch.long
+            ).t().contiguous()
+
+        else:
+
+            edge_index = torch.empty(
+                (2, 0),
+                dtype=torch.long
+            )
 
 
         # ====================================================
@@ -361,103 +452,102 @@ for epoch in range(EPOCHS):
 
 
         # ====================================================
-        # Positive / Negative Pair Loss
+        # Positive / Negative Pair Loss（高速化版）
         # ====================================================
 
-        pair_loss = 0.0
-        pair_count = 0
+        # ----------------------------------------------------
+        # 全ノードペアのインデックスを生成
+        # ----------------------------------------------------
 
+        pair_i, pair_j = torch.triu_indices(
+            len(user_ids),
+            len(user_ids),
+            offset=1
+        )
 
-        for i in range(len(user_ids)):
+        # ----------------------------------------------------
+        # 現在位置と30秒後の位置
+        # ----------------------------------------------------
 
-            for j in range(
-                i + 1,
-                len(user_ids)
-            ):
+        current_xy = torch.tensor(
+            [current_positions[u] for u in user_ids],
+            dtype=torch.float
+        )
 
-                user1 = user_ids[i]
-                user2 = user_ids[j]
+        future_xy = torch.tensor(
+            [future_positions[u] for u in user_ids],
+            dtype=torch.float
+        )
 
+        # ----------------------------------------------------
+        # 全ペアの物理距離を一括計算
+        # ----------------------------------------------------
 
-                current_distance = calculate_distance(
-                    current_positions[user1],
-                    current_positions[user2]
-                )
+        current_distances = torch.linalg.vector_norm(
+            current_xy[pair_i] - current_xy[pair_j],
+            dim=1
+        )
 
-                future_distance = calculate_distance(
-                    future_positions[user1],
-                    future_positions[user2]
-                )
+        future_distances = torch.linalg.vector_norm(
+            future_xy[pair_i] - future_xy[pair_j],
+            dim=1
+        )
 
+        # ----------------------------------------------------
+        # Positive / Negative 判定
+        # ----------------------------------------------------
 
-                # Embedding間距離
-                embedding_distance = torch.norm(
-                    embeddings[i]
-                    -
-                    embeddings[j]
-                )
+        positive_mask = (
+            (current_distances <= DISTANCE_THRESHOLD)
+            &
+            (future_distances <= DISTANCE_THRESHOLD)
+        )
 
+        # ----------------------------------------------------
+        # 全ペアのEmbedding距離を一括計算
+        # ----------------------------------------------------
 
-                # ============================================
-                # Positive
-                # ============================================
+        embedding_distances = torch.linalg.vector_norm(
+            embeddings[pair_i] - embeddings[pair_j],
+            dim=1
+        )
 
-                if (
-                    current_distance
-                    <= DISTANCE_THRESHOLD
-                    and
-                    future_distance
-                    <= DISTANCE_THRESHOLD
-                ):
+        # ----------------------------------------------------
+        # Positive Loss
+        # ----------------------------------------------------
 
-                    # PositiveはEmbeddingを近づける
-                    loss = (
-                        embedding_distance ** 2
-                    )
+        positive_loss = embedding_distances ** 2
 
+        # ----------------------------------------------------
+        # Negative Loss
+        # ----------------------------------------------------
 
-                # ============================================
-                # Negative
-                # ============================================
+        negative_loss = (
+            torch.clamp(
+                1.0 - embedding_distances,
+                min=0.0
+            ) ** 2
+        )
 
-                else:
+        # ----------------------------------------------------
+        # ペアごとに損失を選択
+        # ----------------------------------------------------
 
-                    # Negativeは最低1.0離す
-                    margin = 1.0
+        losses = torch.where(
+            positive_mask,
+            positive_loss,
+            negative_loss
+        )
 
-                    loss = (
-                        torch.clamp(
-                            margin
-                            -
-                            embedding_distance,
-                            min=0.0
-                        )
-                        ** 2
-                    )
+        # ----------------------------------------------------
+        # 全ペアの平均Loss
+        # ----------------------------------------------------
 
+        if losses.numel() > 0:
 
-                pair_loss = (
-                    pair_loss
-                    +
-                    loss
-                )
+            pair_loss = losses.mean()
 
-                pair_count += 1
-
-
-        if pair_count > 0:
-
-            pair_loss = (
-                pair_loss
-                /
-                pair_count
-            )
-
-            total_loss = (
-                total_loss
-                +
-                pair_loss
-            )
+            total_loss = total_loss + pair_loss
 
 
     # ========================================================
@@ -485,9 +575,11 @@ for epoch in range(EPOCHS):
     # 指定Epochの重みを記録
     # ============================================================
 
+    current_epoch = completed_epochs + epoch + 1
+
     if (epoch + 1) in [1, 10, 30, 50, 100]:
 
-        save_model_weights(epoch + 1)
+        save_model_weights(current_epoch)
 
 
 
@@ -511,6 +603,39 @@ for epoch in range(EPOCHS):
 
 
 print("\nTraining finished.")
+
+# ============================================================
+# 学習済みモデルの保存
+# ============================================================
+
+completed_epochs += EPOCHS
+
+checkpoint = {
+    "model_state_dict": model.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
+    "completed_epochs": completed_epochs,
+    "feature_dim": 6,
+    "embedding_dim": 8,
+    "position_scale": POSITION_SCALE,
+    "velocity_scale": VELOCITY_SCALE,
+    "future_delta": FUTURE_DELTA,
+    "distance_threshold": DISTANCE_THRESHOLD
+}
+
+
+
+torch.save(
+    checkpoint,
+    MODEL_FILE
+)
+
+print(
+    f"Model saved: {MODEL_FILE}"
+)
+
+print(
+    f"Total completed epochs: {completed_epochs}"
+)
 
 # ============================================================
 # 学習後Embeddingの確認
