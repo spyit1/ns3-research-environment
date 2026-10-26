@@ -7,12 +7,13 @@ from collections import defaultdict
 # 設定
 # ============================================================
 
-FEATURE_FILE = "graphsage_training.log"
-CLUSTER_FILE = "graphsage_cluster.log"
+FEATURE_FILE = "graphsage_scenarios/50nodes/run_6/graphsage_training.log"
 
-EDGE_FILE = "graphsage_edge.log"
+CLUSTER_FILE = "graphsage_run6_cluster.log"
 
-OUTPUT_FILE = "graphsage_cluster_movement.gif"
+EDGE_FILE = "graphsage_scenarios/50nodes/run_6/graphsage_edge.log"
+
+OUTPUT_FILE = "graphsage_run6_cluster_movement.gif"
 
 X_MIN = 0
 X_MAX = 1000
@@ -164,7 +165,7 @@ ax.grid(True)
 scatter = ax.scatter(
     [],
     [],
-    s=180,
+    s=80,
     zorder=2
 )
 
@@ -299,7 +300,7 @@ def update(frame):
             x + 8,
             y + 8,
             f"{user_id} (C{cluster_id})",
-            fontsize=10
+            fontsize=7
         )
 
         labels.append(label)

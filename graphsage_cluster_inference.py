@@ -181,10 +181,80 @@ def clustering_from_embeddings(embeddings):
 
 
 # ============================================================
+# 前時刻のクラスタIDとの対応付け
+# ============================================================
+
+def match_cluster_ids(user_ids, cluster_labels, previous_clusters, next_id):
+
+    # 今回のクラスタごとの所属ノード
+    current_groups = defaultdict(set)
+
+    for user_id, cluster_id in zip(user_ids, cluster_labels):
+        current_groups[cluster_id].add(user_id)
+
+    # 前時刻のクラスタごとの所属ノード
+    previous_groups = defaultdict(set)
+
+    for user_id, cluster_id in previous_clusters.items():
+        previous_groups[cluster_id].add(user_id)
+
+    # 重複ノード数が多い組み合わせから優先して対応付ける
+    candidates = []
+
+    for current_id, current_members in current_groups.items():
+
+        for previous_id, previous_members in previous_groups.items():
+
+            overlap = len(current_members & previous_members)
+
+            if overlap > 0:
+                candidates.append(
+                    (overlap, current_id, previous_id)
+                )
+
+    candidates.sort(
+        key=lambda item: (-item[0], item[2], item[1])
+    )
+
+    id_mapping = {}
+
+    used_previous_ids = set()
+
+    for overlap, current_id, previous_id in candidates:
+
+        if current_id in id_mapping:
+            continue
+
+        if previous_id in used_previous_ids:
+            continue
+
+        id_mapping[current_id] = previous_id
+        used_previous_ids.add(previous_id)
+
+    # 対応する前時刻クラスタがなければ、新しいIDを割り当てる
+    for current_id in sorted(current_groups):
+
+        if current_id not in id_mapping:
+
+            id_mapping[current_id] = next_id
+            next_id += 1
+
+    # 各ノードに対応付け後のIDを設定
+    matched_clusters = {
+        user_id: id_mapping[cluster_id]
+        for user_id, cluster_id in zip(user_ids, cluster_labels)
+    }
+
+    return matched_clusters, next_id
+
+# ============================================================
 # 全時刻で推論・クラスタリング
 # ============================================================
 
 times = sorted(features_by_time.keys())
+
+previous_clusters = {}
+next_cluster_id = 0
 
 with open(OUTPUT_FILE, "w") as fout:
 
@@ -251,14 +321,24 @@ with open(OUTPUT_FILE, "w") as fout:
         cluster_labels, cluster_count = (
             clustering_from_embeddings(embeddings)
         )
+        
+        # 前時刻のクラスタIDを引き継ぐ
+        matched_clusters, next_cluster_id = match_cluster_ids(
+            user_ids,
+            cluster_labels,
+            previous_clusters,
+            next_cluster_id
+        )
+
+        previous_clusters = matched_clusters.copy()
 
         # ログ出力
-        for index, user_id in enumerate(user_ids):
+        for user_id in user_ids:
 
             fout.write(
                 f"{current_time:g} "
                 f"{user_id} "
-                f"{cluster_labels[index]}\n"
+                f"{matched_clusters[user_id]}\n"
             )
 
         print(

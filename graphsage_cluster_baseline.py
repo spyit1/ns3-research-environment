@@ -1,0 +1,88 @@
+from collections import defaultdict
+
+import numpy as np
+from sklearn.cluster import AgglomerativeClustering
+
+
+# ============================================================
+# 設定
+# ============================================================
+
+FEATURE_FILE = (
+    "graphsage_scenarios/50nodes/run_6/graphsage_training.log"
+)
+
+OUTPUT_FILE = "graphsage_run6_cluster_baseline_fixed20.log"
+
+DISTANCE_THRESHOLD = 100.0
+
+
+# ============================================================
+# 位置情報の読み込み
+# ============================================================
+
+positions_by_time = defaultdict(dict)
+
+with open(FEATURE_FILE, "r") as f:
+
+    for line in f:
+
+        parts = line.split()
+
+        if len(parts) != 8:
+            continue
+
+        current_time = float(parts[0])
+        user_id = int(parts[1])
+
+        x = float(parts[2])
+        y = float(parts[3])
+
+        positions_by_time[current_time][user_id] = [x, y]
+
+
+# ============================================================
+# 全時刻でクラスタリング
+# ============================================================
+
+with open(OUTPUT_FILE, "w") as fout:
+
+    for current_time in sorted(positions_by_time):
+
+        current_positions = positions_by_time[current_time]
+        user_ids = sorted(current_positions)
+
+        position_array = np.array(
+            [current_positions[user_id] for user_id in user_ids],
+            dtype=float
+        )
+
+        if len(user_ids) == 1:
+            labels = np.array([0])
+
+        else:
+            clustering = AgglomerativeClustering(
+                n_clusters=20,
+                distance_threshold=None,
+                linkage="complete",
+                metric="euclidean"
+            )
+
+            labels = clustering.fit_predict(position_array)
+
+        for user_id, cluster_id in zip(user_ids, labels):
+
+            fout.write(
+                f"{current_time:g} "
+                f"{user_id} "
+                f"{cluster_id}\n"
+            )
+
+        print(
+            f"Time={current_time:6.1f}s "
+            f"Nodes={len(user_ids)} "
+            f"Clusters={len(set(labels))}"
+        )
+
+print("\nBaseline clustering finished.")
+print("Saved:", OUTPUT_FILE)

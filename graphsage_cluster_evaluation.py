@@ -1,0 +1,276 @@
+import math
+import csv
+from collections import defaultdict
+
+
+# ============================================================
+# 設定
+# ============================================================
+
+FEATURE_FILE = (
+    "graphsage_scenarios/50nodes/run_6/graphsage_training.log"
+)
+
+CLUSTER_FILE = "graphsage_run6_cluster.log"
+
+OUTPUT_FILE = "graphsage_run6_cluster_evaluation.csv"
+
+FUTURE_DELTA = 30.0
+DISTANCE_THRESHOLD = 100.0
+
+
+# ============================================================
+# 距離計算
+# ============================================================
+
+def calculate_distance(pos1, pos2):
+
+    return math.sqrt(
+        (pos1[0] - pos2[0]) ** 2
+        +
+        (pos1[1] - pos2[1]) ** 2
+    )
+
+
+# ============================================================
+# 位置情報読み込み
+# ============================================================
+
+positions_by_time = defaultdict(dict)
+
+with open(FEATURE_FILE, "r") as f:
+
+    for line in f:
+
+        parts = line.split()
+
+        if len(parts) != 8:
+            continue
+
+        time = float(parts[0])
+        user_id = int(parts[1])
+
+        x = float(parts[2])
+        y = float(parts[3])
+
+        positions_by_time[time][user_id] = (x, y)
+
+
+# ============================================================
+# クラスタ情報読み込み
+# ============================================================
+
+clusters_by_time = defaultdict(dict)
+
+with open(CLUSTER_FILE, "r") as f:
+
+    for line in f:
+
+        parts = line.split()
+
+        if len(parts) != 3:
+            continue
+
+        time = float(parts[0])
+        user_id = int(parts[1])
+        cluster_id = int(parts[2])
+
+        clusters_by_time[time][user_id] = cluster_id
+
+
+# ============================================================
+# 評価
+# ============================================================
+
+results = []
+
+total_valid_pairs = 0
+total_cluster_pairs = 0
+
+total_stable_pairs = 0
+total_stability_pairs = 0
+
+times = sorted(clusters_by_time.keys())
+
+for current_time in times:
+
+    future_time = current_time + FUTURE_DELTA
+
+    if future_time not in positions_by_time:
+        continue
+
+    current_positions = positions_by_time[current_time]
+    future_positions = positions_by_time[future_time]
+
+    current_clusters = clusters_by_time[current_time]
+
+    user_ids = sorted(
+        set(current_positions)
+        &
+        set(future_positions)
+        &
+        set(current_clusters)
+    )
+
+    cluster_pairs = 0
+    valid_pairs = 0
+
+    stable_pairs = 0
+    stability_pairs = 0
+
+    for i in range(len(user_ids)):
+
+        for j in range(i + 1, len(user_ids)):
+
+            user1 = user_ids[i]
+            user2 = user_ids[j]
+
+            # 現在の所属クラスタ
+            same_cluster = (
+                current_clusters[user1]
+                ==
+                current_clusters[user2]
+            )
+
+            if not same_cluster:
+                continue
+
+            cluster_pairs += 1
+
+            current_distance = calculate_distance(
+                current_positions[user1],
+                current_positions[user2]
+            )
+
+            future_distance = calculate_distance(
+                future_positions[user1],
+                future_positions[user2]
+            )
+
+            # 将来近接判定
+            if (
+                current_distance <= DISTANCE_THRESHOLD
+                and
+                future_distance <= DISTANCE_THRESHOLD
+            ):
+
+                valid_pairs += 1
+
+            # クラスタ安定性
+            if future_time in clusters_by_time:
+
+                future_clusters = clusters_by_time[future_time]
+
+                if (
+                    user1 in future_clusters
+                    and
+                    user2 in future_clusters
+                ):
+
+                    stability_pairs += 1
+
+                    if (
+                        future_clusters[user1]
+                        ==
+                        future_clusters[user2]
+                    ):
+
+                        stable_pairs += 1
+
+    # ========================================================
+    # 指標計算
+    # ========================================================
+
+    future_proximity_rate = (
+        valid_pairs / cluster_pairs
+        if cluster_pairs > 0
+        else 0.0
+    )
+
+    cluster_stability = (
+        stable_pairs / stability_pairs
+        if stability_pairs > 0
+        else 0.0
+    )
+
+    results.append([
+        current_time,
+        len(user_ids),
+        len(set(current_clusters.values())),
+        cluster_pairs,
+        valid_pairs,
+        future_proximity_rate,
+        stable_pairs,
+        stability_pairs,
+        cluster_stability
+    ])
+
+    total_valid_pairs += valid_pairs
+    total_cluster_pairs += cluster_pairs
+
+    total_stable_pairs += stable_pairs
+    total_stability_pairs += stability_pairs
+
+    print(
+        f"Time={current_time:5.0f}s "
+        f"Clusters={len(set(current_clusters.values())):3d} "
+        f"FutureProximity={future_proximity_rate * 100:6.2f}% "
+        f"Stability={cluster_stability * 100:6.2f}%"
+    )
+
+
+# ============================================================
+# CSV出力
+# ============================================================
+
+with open(OUTPUT_FILE, "w", newline="") as f:
+
+    writer = csv.writer(f)
+
+    writer.writerow([
+        "time",
+        "num_nodes",
+        "num_clusters",
+        "cluster_pairs",
+        "valid_pairs",
+        "future_proximity_rate",
+        "stable_pairs",
+        "stability_pairs",
+        "cluster_stability"
+    ])
+
+    writer.writerows(results)
+
+
+# ============================================================
+# 全時刻の集計
+# ============================================================
+
+overall_proximity = (
+    total_valid_pairs / total_cluster_pairs
+    if total_cluster_pairs > 0
+    else 0.0
+)
+
+overall_stability = (
+    total_stable_pairs / total_stability_pairs
+    if total_stability_pairs > 0
+    else 0.0
+)
+
+print("\n=== Overall Cluster Evaluation ===")
+
+print("Total cluster pairs:", total_cluster_pairs)
+print("Valid future pairs:", total_valid_pairs)
+
+print(
+    f"Overall Future Proximity: "
+    f"{overall_proximity * 100:.2f}%"
+)
+
+print(
+    f"Overall Cluster Stability: "
+    f"{overall_stability * 100:.2f}%"
+)
+
+print("\nSaved:", OUTPUT_FILE)

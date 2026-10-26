@@ -1,0 +1,152 @@
+/home/sota22531/ns-allinone-3.35/ns-3.35/graphsage-venv/lib/python3.10/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+Training time count: 34
+Epoch   1 Loss = 0.431242
+Epoch  10 Loss = 0.081175
+Epoch  20 Loss = 0.032696
+Epoch  30 Loss = 0.021578
+Epoch  40 Loss = 0.013581
+Epoch  50 Loss = 0.009575
+Epoch  60 Loss = 0.006594
+Epoch  70 Loss = 0.004554
+Epoch  80 Loss = 0.003304
+Epoch  90 Loss = 0.002577
+Epoch 100 Loss = 0.002069
+
+Training finished.
+
+=== Trained Embeddings ===
+userId=0: [0.12913525104522705, 0.45053356885910034, -1.6934924125671387, -1.7882769107818604, -0.9004834890365601, 0.9221686720848083, -1.6351004838943481, -0.9805912375450134]
+userId=1: [0.6619892716407776, -0.1711782068014145, -1.0523967742919922, -1.6515424251556396, -0.2518652677536011, 0.4104326367378235, -1.154017686843872, -0.3201659321784973]
+userId=2: [-0.34937191009521484, 0.8961871862411499, -0.11805176734924316, -1.7218698263168335, -0.1069612205028534, 1.4675638675689697, -1.3285696506500244, -0.038501232862472534]
+userId=3: [-1.235273003578186, 1.9692480564117432, -0.5761640071868896, -2.826371669769287, -0.920707106590271, 2.340813159942627, -2.1832287311553955, -0.2686770558357239]
+userId=4: [-0.4633592367172241, 1.0105109214782715, -0.13159483671188354, -1.6856842041015625, -0.20609372854232788, 1.525339126586914, -1.3696565628051758, -0.118527352809906]
+userId=5: [-1.027653694152832, 1.788224697113037, -0.7044012546539307, -2.8912503719329834, -0.8438977599143982, 2.290672779083252, -2.220959424972534, -0.18839484453201294]
+userId=6: [1.892113208770752, -1.490044355392456, 0.05539920926094055, -1.6356401443481445, 1.043172836303711, -0.6547316908836365, -0.34732896089553833, 1.0371071100234985]
+userId=7: [2.0825343132019043, -1.6755281686782837, -0.20096692442893982, -2.0162932872772217, 0.9962888360023499, -0.7425382733345032, -0.6004312634468079, 1.0150336027145386]
+
+=== Embedding Distances ===
+0 -- 1 : 1.565356
+0 -- 2 : 2.196048
+0 -- 3 : 3.051949
+0 -- 4 : 2.185013
+0 -- 5 : 2.858188
+0 -- 6 : 4.685054
+0 -- 7 : 4.694420
+1 -- 2 : 2.070844
+1 -- 3 : 3.876041
+1 -- 4 : 2.200934
+1 -- 5 : 3.659735
+1 -- 6 : 3.128053
+1 -- 7 : 3.180478
+2 -- 3 : 2.360983
+2 -- 4 : 0.220938
+2 -- 5 : 2.237513
+2 -- 6 : 4.324649
+2 -- 7 : 4.512569
+3 -- 4 : 2.207703
+3 -- 5 : 0.335875
+3 -- 6 : 6.439695
+3 -- 7 : 6.513397
+4 -- 5 : 2.104018
+4 -- 6 : 4.531282
+4 -- 7 : 4.719762
+5 -- 6 : 6.218901
+5 -- 7 : 6.273026
+6 -- 7 : 0.596440
+
+=== Clustering Result ===
+userId=0 cluster=0
+userId=1 cluster=0
+userId=2 cluster=0
+userId=3 cluster=2
+userId=4 cluster=0
+userId=5 cluster=2
+userId=6 cluster=1
+userId=7 cluster=1
+
+=== Embedding Separation Evaluation ===
+
+Positive pairs
+Count = 35
+Mean  = 0.074897
+Min   = 0.014117
+Max   = 0.557497
+
+Negative pairs
+Count = 917
+Mean  = 3.261786
+Min   = 0.335875
+Max   = 7.064271
+
+=== Separation Check ===
+Positive Max = 0.557497
+Negative Min = 0.335875
+Result: Overlap
+
+=== Worst Positive Pair ===
+Time = 160 -> 190
+Pair = 3 -- 6
+Current Distance = 88.796
+Future Distance = 97.007
+Embedding Distance = 0.557497
+
+=== Closest Negative Pair ===
+Time = 0 -> 30
+Pair = 3 -- 5
+Current Distance = 91.056
+Future Distance = 148.152
+Embedding Distance = 0.335875
+
+=== Pair Evaluation ===
+
+Time 60 -> 90
+0 -- 1 Negative current=244.659 future=265.442 embedding=2.668459
+0 -- 2 Negative current=494.745 future=446.091 embedding=2.632971
+0 -- 6 Negative current=593.091 future=473.985 embedding=5.032764
+0 -- 7 Negative current=665.274 future=582.211 embedding=5.632011
+1 -- 2 Negative current=262.667 future=182.798 embedding=3.296284
+1 -- 6 Negative current=459.059 future=432.404 embedding=2.538333
+1 -- 7 Negative current=602.014 future=588.887 embedding=3.077644
+2 -- 6 Negative current=546.136 future=459.916 embedding=4.875138
+2 -- 7 Negative current=740.287 future=625.910 embedding=5.888181
+6 -- 7 Negative current=212.688 future=165.998 embedding=1.838929
+
+Time 90 -> 120
+0 -- 1 Negative current=265.442 future=306.251 embedding=2.397287
+0 -- 2 Negative current=446.091 future=397.483 embedding=2.615390
+0 -- 6 Negative current=473.985 future=355.105 embedding=4.428614
+0 -- 7 Negative current=582.211 future=502.202 embedding=5.224677
+1 -- 2 Negative current=182.798 future=147.495 embedding=3.166441
+1 -- 6 Negative current=432.404 future=426.614 embedding=2.217249
+1 -- 7 Negative current=588.887 future=575.975 embedding=2.982993
+2 -- 6 Negative current=459.916 future=382.850 embedding=4.497332
+2 -- 7 Negative current=625.910 future=511.951 embedding=5.641696
+6 -- 7 Negative current=165.998 future=156.811 embedding=1.830979
+
+Time 120 -> 150
+0 -- 1 Negative current=306.251 future=358.032 embedding=2.144052
+0 -- 2 Negative current=397.483 future=348.943 embedding=2.627424
+0 -- 6 Negative current=355.105 future=236.788 embedding=3.831671
+0 -- 7 Negative current=502.202 future=426.965 embedding=4.820282
+1 -- 2 Negative current=147.495 future=182.202 embedding=3.048972
+1 -- 6 Negative current=426.614 future=439.705 embedding=1.911784
+1 -- 7 Negative current=575.975 future=560.583 embedding=2.888623
+2 -- 6 Negative current=382.850 future=321.587 embedding=4.129437
+2 -- 7 Negative current=511.951 future=398.771 embedding=5.392356
+6 -- 7 Negative current=156.811 future=190.629 embedding=1.865039
+
+Time 140 -> 170
+0 -- 1 Negative current=341.196 future=346.665 embedding=1.988609
+0 -- 2 Negative current=365.114 future=316.635 embedding=2.642752
+0 -- 6 Negative current=276.120 future=158.848 embedding=3.439566
+0 -- 7 Negative current=451.363 future=380.866 embedding=4.552701
+1 -- 2 Negative current=165.133 future=178.367 embedding=2.978422
+1 -- 6 Negative current=434.881 future=401.218 embedding=1.720938
+1 -- 7 Negative current=567.492 future=493.191 embedding=2.825868
+2 -- 6 Negative current=339.680 future=294.540 embedding=3.899322
+2 -- 7 Negative current=436.373 future=324.152 embedding=5.229222
+6 -- 7 Negative current=175.464 future=228.796 embedding=1.910088
+
+=== Export Cluster Log ===
+Saved: graphsage_rw_cluster.log

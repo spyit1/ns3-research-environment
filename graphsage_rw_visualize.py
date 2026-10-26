@@ -127,7 +127,9 @@ print("End time:", times[-1])
 CLUSTER_COLORS = {
     0: "tab:blue",
     1: "tab:orange",
-    2: "tab:green"
+    2: "tab:green",
+    3: "tab:red",
+    4: "tab:purple"
 }
 
 # ============================================================
